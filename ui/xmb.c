@@ -430,12 +430,26 @@ static void draw_top(const ui_state *ui)
         font_draw(FONT_BOLD, 10, right, 3, t->text, ui->clock);
         right -= 8;
     }
-    char volume[8];
-    snprintf(volume, sizeof volume, "%d", ui->volume);
-    right -= font_width(FONT_REGULAR, 10, volume);
-    font_draw(FONT_REGULAR, 10, right, 3, t->dim, volume);
-    right -= 15;
-    font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE, 12, right, 5, t->dim);
+    /* Compact transient volume bar occupies the former volume readout area,
+     * immediately to the left of the clock. */
+    if (ui->volume_popup_left > 0.0f) {
+        const float alpha = clampf(ui->volume_popup_left / 0.3f, 0.0f, 1.0f);
+        const float w = 116.0f, h = 21.0f, x = right - w, y = 1.0f;
+        draw_round_rect(x, y, w, h, 7.0f, color_fade(t->surface, alpha * 0.95f));
+        font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
+                  11, x + 7.0f, y + 4.0f, color_fade(t->text, alpha));
+        char percentage[8];
+        snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
+        const float text_w = font_width(FONT_BOLD, 10, percentage);
+        font_draw(FONT_BOLD, 10, x + w - 7.0f - text_w, y + 2.0f,
+                  color_fade(t->text, alpha), percentage);
+        const float bar_x = x + 23.0f, bar_y = y + 15.0f, bar_w = w - 30.0f;
+        draw_round_rect(bar_x, bar_y, bar_w, 3.0f, 1.5f,
+                        color_fade(t->dim, alpha * 0.45f));
+        if (ui->volume > 0)
+            draw_round_rect(bar_x, bar_y, bar_w * (float)ui->volume / 100.0f,
+                            3.0f, 1.5f, color_fade(0xFF1DB954u, alpha));
+    }
 }
 
 static void draw_categories(const ui_state *ui)
@@ -801,29 +815,6 @@ void ui_draw(const ui_state *ui)
     }
     }
     if (mini) draw_mini(ui);
-
-    /* Show a small volume indicator after a change, without covering the
-     * permanent speaker icon and percentage in the top bar. */
-    if (ui->volume_popup_left > 0.0f) {
-        const float alpha = clampf(ui->volume_popup_left / 0.3f, 0.0f, 1.0f);
-        const float x = 336.0f, y = 23.0f, w = 130.0f;
-        draw_round_rect(x, y, w, 39.0f, 8.0f,
-                        color_fade(t->surface, alpha * 0.95f));
-        font_draw(FONT_BOLD, 10, x + 10.0f, y + 5.0f,
-                  color_fade(t->text, alpha), "Volume");
-        char percentage[8];
-        snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
-        const float text_w = font_width(FONT_BOLD, 10, percentage);
-        font_draw(FONT_BOLD, 10, x + w - 10.0f - text_w, y + 5.0f,
-                  color_fade(t->text, alpha), percentage);
-        draw_round_rect(x + 10.0f, y + 26.0f, w - 20.0f, 5.0f, 2.5f,
-                        color_fade(t->dim, alpha * 0.45f));
-        if (ui->volume > 0) {
-            draw_round_rect(x + 10.0f, y + 26.0f,
-                            (w - 20.0f) * (float)ui->volume / 100.0f,
-                            5.0f, 2.5f, color_fade(0xFF1DB954u, alpha));
-        }
-    }
 
     if (ui->toast_left > 0 && ui->toast[0]) {
         const float a = clampf(ui->toast_left / 0.3f, 0.0f, 1.0f);
