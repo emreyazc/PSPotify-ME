@@ -233,6 +233,7 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
         volume = volume < 0 ? 0 : volume > 100 ? 100 : volume;
         if (volume != ui->volume) {
             ui->volume = volume;
+            ui->volume_popup_left = 2.0f;
             emit(ui, UI_EV_VOLUME, volume);
         }
     } else {
@@ -300,6 +301,7 @@ static void animate(ui_state *ui, float dt)
     ui->cat_pos = approach(ui->cat_pos, (float)cat_slot(ui, ui->cat), anim_rate(ui, 14.0f), dt);
     ui->menu_pos = approach(ui->menu_pos, ui->menu.open ? 1.0f : 0.0f, anim_rate(ui, 18.0f), dt);
     if (ui->toast_left > 0) ui->toast_left -= dt;
+    if (ui->volume_popup_left > 0) ui->volume_popup_left -= dt;
     const float fade = 1.0f - expf(-anim_rate(ui, 6.0f) * dt);
     ui_theme *th = &ui->theme;
     const ui_theme *to = &ui->theme_target;
@@ -799,6 +801,29 @@ void ui_draw(const ui_state *ui)
     }
     }
     if (mini) draw_mini(ui);
+
+    /* Show a small volume indicator after a change, without covering the
+     * permanent speaker icon and percentage in the top bar. */
+    if (ui->volume_popup_left > 0.0f) {
+        const float alpha = clampf(ui->volume_popup_left / 0.3f, 0.0f, 1.0f);
+        const float x = 336.0f, y = 23.0f, w = 130.0f;
+        draw_round_rect(x, y, w, 39.0f, 8.0f,
+                        color_fade(t->surface, alpha * 0.95f));
+        font_draw(FONT_BOLD, 10, x + 10.0f, y + 5.0f,
+                  color_fade(t->text, alpha), "Volume");
+        char percentage[8];
+        snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
+        const float text_w = font_width(FONT_BOLD, 10, percentage);
+        font_draw(FONT_BOLD, 10, x + w - 10.0f - text_w, y + 5.0f,
+                  color_fade(t->text, alpha), percentage);
+        draw_round_rect(x + 10.0f, y + 26.0f, w - 20.0f, 5.0f, 2.5f,
+                        color_fade(t->dim, alpha * 0.45f));
+        if (ui->volume > 0) {
+            draw_round_rect(x + 10.0f, y + 26.0f,
+                            (w - 20.0f) * (float)ui->volume / 100.0f,
+                            5.0f, 2.5f, color_fade(0xFF1DB954u, alpha));
+        }
+    }
 
     if (ui->toast_left > 0 && ui->toast[0]) {
         const float a = clampf(ui->toast_left / 0.3f, 0.0f, 1.0f);
