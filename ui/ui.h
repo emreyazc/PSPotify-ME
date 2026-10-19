@@ -150,6 +150,7 @@ typedef struct ui_state {
     int moving;             /* a row of a movable list is picked up */
     char toast[64];         /* a short note at the bottom, e.g. "Added to queue" */
     float toast_left;
+    float volume_popup_left; /* seconds until the volume indicator disappears */
     ui_event events[UI_MAX_EVENTS];
     int event_count;
 
