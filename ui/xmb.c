@@ -440,10 +440,10 @@ static void draw_top(const ui_state *ui)
         const float bar_w = 70.0f;
         const float gap = 9.0f;
         const float icon_w = 12.0f;
-        const float x = right - (icon_w + gap + bar_w + gap + text_w);
-        const float bar_x = x + icon_w + gap;
+        const float volume_x = right - (icon_w + gap + bar_w + gap + text_w);
+        const float bar_x = volume_x + icon_w + gap;
         font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
-                  12, x, 5.0f, color_fade(t->dim, alpha));
+                  12, volume_x, 5.0f, color_fade(t->dim, alpha));
         draw_round_rect(bar_x, 10.0f, bar_w, 4.0f, 2.0f,
                         color_fade(t->dim, alpha * 0.5f));
         if (ui->volume > 0)
