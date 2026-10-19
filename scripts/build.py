@@ -66,7 +66,7 @@ def prepare_dependencies(cmake, generator):
         # Windows may check out .patch files with CRLF while Docker clones
         # dependency sources with LF. Normalize the patch in memory so both
         # platforms apply the same changes without modifying tracked files.
-        patch_data = patch.read_bytes().replace(b"\\r\\n", b"\\n")
+        patch_data = patch.read_bytes().replace(b"\r\n", b"\n")
         apply_cmd = ["git", "-C", str(source), "apply", "--ignore-space-change"]
         reverse = subprocess.run(
             [*apply_cmd, "--reverse", "--check", "-"],
