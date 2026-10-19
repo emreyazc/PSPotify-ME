@@ -430,25 +430,27 @@ static void draw_top(const ui_state *ui)
         font_draw(FONT_BOLD, 10, right, 3, t->text, ui->clock);
         right -= 8;
     }
-    /* Compact transient volume bar occupies the former volume readout area,
-     * immediately to the left of the clock. */
+    /* Windows-style inline volume display: icon, bar, percentage.
+     * No pill or background; aligned with the clock in the top bar. */
     if (ui->volume_popup_left > 0.0f) {
         const float alpha = clampf(ui->volume_popup_left / 0.3f, 0.0f, 1.0f);
-        const float w = 116.0f, h = 21.0f, x = right - w, y = 1.0f;
-        draw_round_rect(x, y, w, h, 7.0f, color_fade(t->surface, alpha * 0.95f));
-        font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
-                  11, x + 7.0f, y + 4.0f, color_fade(t->text, alpha));
         char percentage[8];
         snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
         const float text_w = font_width(FONT_BOLD, 10, percentage);
-        font_draw(FONT_BOLD, 10, x + w - 7.0f - text_w, y + 2.0f,
-                  color_fade(t->text, alpha), percentage);
-        const float bar_x = x + 23.0f, bar_y = y + 15.0f, bar_w = w - 30.0f;
-        draw_round_rect(bar_x, bar_y, bar_w, 3.0f, 1.5f,
-                        color_fade(t->dim, alpha * 0.45f));
+        const float bar_w = 70.0f;
+        const float gap = 9.0f;
+        const float icon_w = 12.0f;
+        const float x = right - (icon_w + gap + bar_w + gap + text_w);
+        const float bar_x = x + icon_w + gap;
+        font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
+                  12, x, 5.0f, color_fade(t->dim, alpha));
+        draw_round_rect(bar_x, 10.0f, bar_w, 4.0f, 2.0f,
+                        color_fade(t->dim, alpha * 0.5f));
         if (ui->volume > 0)
-            draw_round_rect(bar_x, bar_y, bar_w * (float)ui->volume / 100.0f,
-                            3.0f, 1.5f, color_fade(0xFF1DB954u, alpha));
+            draw_round_rect(bar_x, 10.0f, bar_w * (float)ui->volume / 100.0f,
+                            4.0f, 2.0f, color_fade(0xFF1DB954u, alpha));
+        font_draw(FONT_BOLD, 10, bar_x + bar_w + gap, 3.0f,
+                  color_fade(t->text, alpha), percentage);
     }
 }
 
