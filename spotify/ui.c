@@ -237,7 +237,7 @@ static const char *const cat_titles[UI_CATS] = {
 };
 static const unsigned cat_icon[UI_CATS] = {
     ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
-    ICON_LIST_MUSIC
+    ICON_USER
 };
 static int cat_all[UI_CATS] = { 0, 1, 2, 3, UI_CAT_MY_PLAYLISTS, 4, 5, 6 };
 static unsigned char cat_hidden[UI_CATS];
@@ -597,10 +597,13 @@ static void fill_groups(void)
         memset(r, 0, sizeof *r);
         copy_text(r->title, sizeof r->title, ui_tr(group_info[g].title));
         if (g == PREF_GROUP_THEMES && theme_active >= 0)
-            snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 %d installed",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s · %d yüklü" : "%s · %d installed",
                      theme_names[theme_active], theme_count);
         else if (g == PREF_GROUP_ABOUT && update_state == UPDATE_AVAILABLE)
-            snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out", update_info.version);
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s sürümü yayınlandı" : "Version %s is out",
+                     update_info.version);
         else
             copy_text(r->subtitle, sizeof r->subtitle, ui_tr(group_info[g].subtitle));
         r->icon = group_info[g].icon;
@@ -656,9 +659,9 @@ static void fill_options(void)
             for (int k = 0; k < theme_count; ++k) installed |= !strcmp(theme_names[k], gallery[i].folder);
             copy_text(r->title, sizeof r->title, gallery[i].folder);
             snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
-                     busy && site_arg == i ? "Downloading\xE2\x80\xA6"
-                     : installed ? "Installed \xC2\xB7 select to download again" : "Select to download",
-                     gallery[i].has_wallpaper ? " \xC2\xB7 wallpaper" : "");
+                     ui_tr(busy && site_arg == i ? "Downloading\xE2\x80\xA6"
+                     : installed ? "Installed \xC2\xB7 select to download again" : "Select to download"),
+                     gallery[i].has_wallpaper ? (prefs[PREF_LANGUAGE] ? " · duvar kâğıdı" : " · wallpaper") : "");
             r->icon = installed ? ICON_PALETTE : ICON_DOWNLOAD;
             r->color = gallery[i].accent;
             r->playing = installed;
@@ -672,22 +675,27 @@ static void fill_options(void)
         case UPDATE_CHECKING: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Checking for updates\xE2\x80\xA6")); break;
         case UPDATE_CURRENT: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Up to date")); break;
         case UPDATE_AVAILABLE:
-            snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out \xC2\xB7 select to install",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s sürümü hazır · yüklemek için seç"
+                                          : "Version %s is out · select to install",
                      update_info.version);
             break;
         case UPDATE_FAILED:
-            copy_text(r->subtitle, sizeof r->subtitle, "Couldn't check \xC2\xB7 select to try again");
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Couldn't check · select to try again"));
             break;
         case UPDATE_INSTALLING:
-            snprintf(r->subtitle, sizeof r->subtitle, "Downloading %s\xE2\x80\xA6 %d%%",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s indiriliyor… %d%%" : "Downloading %s… %d%%",
                      update_info.version, update_progress);
             break;
         case UPDATE_INSTALLED:
-            snprintf(r->subtitle, sizeof r->subtitle, "%s installed \xC2\xB7 select to quit, then start it again",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s yüklendi · çıkıp yeniden başlat"
+                                          : "%s installed · select to quit, then start it again",
                      update_info.version);
             break;
         case UPDATE_INSTALL_FAILED:
-            copy_text(r->subtitle, sizeof r->subtitle, "Update failed, nothing changed \xC2\xB7 select to try again");
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Update failed, nothing changed · select to try again"));
             break;
         default: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Select to check for updates")); break;
         }
@@ -1761,14 +1769,15 @@ static void sync_state(void)
         n->paused = control.paused;
         n->loading = play_state == PS_LOADING && control.position_ms == 0;
         if (play_state == PS_ERROR)
-            copy_text(n->album, sizeof n->album,
+            copy_text(n->album, sizeof n->album, ui_tr(
                       last_error == PLAYER_ERR_NO_MEMORY ? "Couldn't play: not enough memory"
                       : last_error <= -4 && last_error > -10
                           ? "Spotify refused this track (Premium needed?)"
                           : last_error == -2 ? "No playable version of this track"
-                          : "Couldn't play this track");
+                          : "Couldn't play this track"));
         else
-            snprintf(n->album, sizeof n->album, "From %s", queue_name);
+            snprintf(n->album, sizeof n->album,
+                     prefs[PREF_LANGUAGE] ? "%s içinden" : "From %s", queue_name);
         int upcoming = next_index(idx, 1);
         copy_text(n->next, sizeof n->next,
                   upcoming >= 0 && upcoming != idx ? queue[upcoming].name : "");
@@ -1790,12 +1799,14 @@ static void sync_state(void)
                 track_rows(&queue[qi], 1, &queue_rows[count]);
                 if (queued[qi]) {
                     char sub[96];
-                    snprintf(sub, sizeof sub, "Queued \xC2\xB7 %.80s", queue[qi].artist);
+                    snprintf(sub, sizeof sub, prefs[PREF_LANGUAGE]
+                             ? "Kuyrukta · %.80s" : "Queued · %.80s", queue[qi].artist);
                     copy_text(queue_rows[count].subtitle, sizeof queue_rows[count].subtitle, sub);
                 }
                 ++count;
             }
-            snprintf(ql->header, sizeof ql->header, "Up next \xC2\xB7 %d songs", count);
+            snprintf(ql->header, sizeof ql->header,
+                     prefs[PREF_LANGUAGE] ? "Sıradaki · %d şarkı" : "Up next · %d songs", count);
             ql->rows = queue_rows;
             ql->count = count;
             ql->movable = 1;
@@ -1964,7 +1975,7 @@ static void start_search(void)
 {
     char text[128];
     copy_text(text, sizeof text, xmb.search_query);
-    if (!ask_text("Search Spotify", text, sizeof text)) return;
+    if (!ask_text(ui_tr("Search Spotify"), text, sizeof text)) return;
     copy_text(xmb.search_query, sizeof xmb.search_query, text);
     copy_text(search_text, sizeof search_text, text);
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
@@ -2672,7 +2683,7 @@ static void arrange_playlists(void)
 
 static void load_playlists(void)
 {
-    frame_message("Loading your library\xE2\x80\xA6", NULL);
+    frame_message(ui_tr("Loading your library…"), NULL);
     int n = spotify_sp_playlists(ctx.client_token, ctx.access_token, ctx.cfg.username,
                                  &playlists[1], MAX_PLAYLISTS);
     playlist_count = n > 0 ? n : 0;
@@ -2744,7 +2755,7 @@ int spotify_ui_run(volatile int *exit_requested)
     spotify_ui_hooks hooks = { on_status, on_pair_code };
     int ret = spotify_ctx_start(&ctx, &hooks);
     if (ret < 0) {
-        frame_message("Could not sign in to Spotify", log_enabled()
+        frame_message(ui_tr("Could not sign in to Spotify"), log_enabled()
                       ? "See spotify.log. START: exit"
                       : "debug = on in settings.ini logs it. START: exit");
         SceCtrlData pad;
@@ -2817,7 +2828,7 @@ int spotify_ui_run(volatile int *exit_requested)
                 /* Like holding the power switch: the console shuts down. */
                 log_printf("UI: sleep timer: turning the PSP off\n");
                 log_flush();
-                frame_message("Good night", NULL);
+                frame_message(ui_tr("Good night"), NULL);
                 scePowerRequestStandby();
             }
             ui_toast(&xmb, "Sleep timer: paused");
@@ -2852,7 +2863,7 @@ int spotify_ui_run(volatile int *exit_requested)
     }
 
     log_printf("UI: exit requested\n");
-    frame_message("Stopping\xE2\x80\xA6", NULL);
+    frame_message(ui_tr("Stopping…"), NULL);
     player_quit = 1;
     SceUID helpers[3] = { cover_thid, loader_thid, thumb_thid };
     for (int i = 0; i < 3; ++i) {
