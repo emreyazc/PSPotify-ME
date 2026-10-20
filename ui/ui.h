@@ -16,6 +16,7 @@ enum {
     UI_CAT_NOW,
     UI_CAT_QUEUE,
     UI_CAT_SETTINGS,
+    UI_CAT_MY_PLAYLISTS,  /* append to preserve old category IDs */
     UI_CATS
 };
 
