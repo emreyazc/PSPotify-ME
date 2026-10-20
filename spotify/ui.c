@@ -243,7 +243,7 @@ static int cat_all[UI_CATS] = { 0, 1, 2, 3, UI_CAT_MY_PLAYLISTS, 4, 5, 6 };
 static unsigned char cat_hidden[UI_CATS];
 /* PREF_START values, in order. */
 static const int start_categories[] = {
-    UI_CAT_PLAYLISTS, UI_CAT_LIKED, UI_CAT_SEARCH, UI_CAT_RECENT, UI_CAT_NOW
+    UI_CAT_PLAYLISTS, UI_CAT_LIKED, UI_CAT_SEARCH, UI_CAT_RECENT, UI_CAT_NOW, UI_CAT_MY_PLAYLISTS
 };
 
 /* Playlists pinned to the top, by id; and the order they are listed in. */
@@ -807,7 +807,22 @@ static void read_categories(const char *value)
     }
     /* Categories the file does not name (new ones) go at the end. */
     for (int c = 0; c < UI_CATS; ++c)
-        if (!used[c]) seq[n++] = c;
+        if (!used[c]) {
+            if (c == UI_CAT_MY_PLAYLISTS) {
+                /* Existing settings.ini lacks the new category. Place it
+                 * beside Playlists instead of after Settings. */
+                int pos = -1;
+                for (int k = 0; k < n; ++k)
+                    if (seq[k] == UI_CAT_PLAYLISTS) { pos = k + 1; break; }
+                if (pos >= 0) {
+                    memmove(seq + pos + 1, seq + pos, sizeof seq[0] * (size_t)(n - pos));
+                    seq[pos] = c;
+                    ++n;
+                    continue;
+                }
+            }
+            seq[n++] = c;
+        }
     memcpy(cat_all, seq, sizeof cat_all);
     memcpy(cat_hidden, hidden, sizeof cat_hidden);
     cat_hidden[UI_CAT_SETTINGS] = 0;
@@ -2662,7 +2677,8 @@ static void load_playlists(void)
                                  &playlists[1], MAX_PLAYLISTS);
     playlist_count = n > 0 ? n : 0;
     arrange_playlists();
-    log_printf("UI: %d playlists\n", n);
+    log_printf("UI: %d playlists, %d owned by current user\n",
+               playlist_count, my_playlist_count);
 }
 
 static int setup_ui(void)
