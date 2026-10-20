@@ -728,6 +728,7 @@ static int sp_playlists_unlocked(const char *client_token, const char *access_to
         copy_str(p->id, sizeof p->id, uris[i] + 17, 22);
         snprintf(p->name, sizeof p->name, "Playlist %.8s", p->id);
         p->total = -1;
+        p->owner[0] = '\0';
         p->image[0] = '\0';
         if (!aligned) continue;
         pb_init(&r, metas[i], meta_lens[i]);
@@ -741,6 +742,10 @@ static int sp_playlists_unlocked(const char *client_token, const char *access_to
                 with_image += p->image[0] != '\0';
             } else if (f.field == 3 && f.wire == 0) {
                 p->total = (int)f.varint;
+            } else if (f.field == 5 && f.wire == 2) {
+                /* playlist4 MetaItem.owner_username. Do not guess the
+                 * owner of entries lacking metadata. */
+                copy_str(p->owner, sizeof p->owner, f.data, f.len);
             }
         }
     }
