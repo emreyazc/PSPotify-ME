@@ -785,16 +785,21 @@ static int sp_liked_unlocked(const char *client_token, const char *access_token,
                 const uint8_t *uri = NULL;
                 size_t uri_len = 0;
                 int removed = 0;
+                uint64_t added_at = 0;
                 pb_reader ir;
                 pb_field iff;
                 pb_init(&ir, f.data, f.len);
                 while (pb_next(&ir, &iff) == 1) {
                     if (iff.field == 1 && iff.wire == 2) { uri = iff.data; uri_len = iff.len; }
+                    if (iff.field == 2 && iff.wire == 0) added_at = iff.varint;
                     if (iff.field == 3 && iff.wire == 0) removed = (int)iff.varint;
                 }
                 if (uri && !removed && count < max &&
-                    track_uri_to_id(uri, uri_len, out[count].id) == 0)
+                    track_uri_to_id(uri, uri_len, out[count].id) == 0) {
+                    out[count].added_at = added_at;
+                    out[count].source_index = count;
                     ++count;
+                }
             } else if (f.field == 2 && f.wire == 2) {
                 copy_str(token, sizeof token, f.data, f.len);
             }
@@ -827,8 +832,24 @@ static int sp_tracks_unlocked(const char *client_token, const char *access_token
         const uint8_t *uri;
         size_t uri_len;
         if (pb_find_bytes(f.data, f.len, 1, &uri, &uri_len) == 0 &&
-            track_uri_to_id(uri, uri_len, out[count].id) == 0)
+            track_uri_to_id(uri, uri_len, out[count].id) == 0) {
+            /* playlist4 Item.attributes(2).timestamp(2) is the add time. */
+            const uint8_t *attrs;
+            size_t attrs_len;
+            pb_reader ar;
+            pb_field af;
+            if (pb_find_bytes(f.data, f.len, 2, &attrs, &attrs_len) == 0) {
+                pb_init(&ar, attrs, attrs_len);
+                while (pb_next(&ar, &af) == 1) {
+                    if (af.field == 2 && af.wire == 0) {
+                        out[count].added_at = af.varint;
+                        break;
+                    }
+                }
+            }
+            out[count].source_index = count;
             ++count;
+        }
     }
     return count;
 }
