@@ -161,6 +161,11 @@ typedef struct ui_state {
     float repeat_at, lr_held, lr_seek_at;
 } ui_state;
 
+/* Shared English -> Turkish UI dictionary; Spotify song/playlist names are
+ * never translated. 0 = English, 1 = Turkish. */
+void ui_set_language(int language);
+const char *ui_tr(const char *english);
+
 int ui_init(ui_state *ui);
 /* Opens a menu for the row the last UI_EV_OPTIONS came from. */
 void ui_menu_open(ui_state *ui, const char *const *items, int count);
