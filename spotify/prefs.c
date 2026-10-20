@@ -6,6 +6,8 @@
 int prefs[PREF_COUNT];
 
 static const char *const on_off_tokens[] = { "off", "on" };
+static const char *const language_names[] = { "English", "Türkçe" };
+static const char *const language_tokens[] = { "en", "tr" };
 static const char *const off_on[] = { "Off", "On" };
 static const char *const background_names[] = { "Plain", "Blurred cover", "Theme wallpaper" };
 static const char *const background_tokens[] = { "plain", "blurred_cover", "wallpaper" };
@@ -81,6 +83,8 @@ static pref_def defs[PREF_COUNT] = {
                           hint_tokens, 0),
     [PREF_VISUALIZER] = CHOICE("visualizer", "Visualizer on Now Playing", PREF_GROUP_APPEARANCE,
                                off_on, on_off_tokens, 0),
+    [PREF_LANGUAGE] = CHOICE("language", "Language", PREF_GROUP_APPEARANCE,
+                              language_names, language_tokens, 0),
     [PREF_START] = CHOICE("start_screen", "Start screen", PREF_GROUP_LAYOUT, start_names,
                           start_tokens, 0),
     [PREF_NOW_LAYOUT] = CHOICE("now_playing", "Now Playing", PREF_GROUP_LAYOUT, now_names,
