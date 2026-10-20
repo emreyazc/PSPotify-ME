@@ -1152,14 +1152,21 @@ static int sp_recent_tracks_unlocked(const char *client_token, const char *acces
     if (n <= 0 || (size_t)n >= sizeof url) return -1;
     size_t len = 0;
     int status = sp_get(url, &len);
-    if (status != 200) {
-        log_printf("RECENT: history HTTP %d\n", status);
-        return status < 0 ? status : -status;
+    int count = status == 200 ? scan_track_ids(len, out, max) : 0;
+    /* A desktop client's undocumented history feed may omit raw track URIs.
+     * Try the standard history endpoint with our existing OAuth token. The
+     * shared client can receive HTTP 429; failure must not invent songs. */
+    if (!count) {
+        const int primary_status = status;
+        status = sp_get("https://api.spotify.com/v1/me/player/recently-played?limit=50", &len);
+        if (status == 200) count = scan_track_ids(len, out, max);
+        log_printf("RECENT: standard history fallback HTTP %d (%d tracks)\n",
+                   status, count);
+        if (!count && primary_status != 200)
+            return primary_status < 0 ? primary_status : -primary_status;
     }
-    int count = scan_track_ids(len, out, max);
     for (int i = 0; i < count; ++i) out[i].source_index = i;
-    log_printf("RECENT: %d recently played tracks (%u bytes)\n",
-               count, (unsigned int)len);
+    log_printf("RECENT: %d recently played tracks\n", count);
     return count;
 }
 
