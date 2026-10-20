@@ -2232,10 +2232,15 @@ static void site_finished(void)
             menu_actions[0] = MENU_UPDATE;
             menu_actions[1] = MENU_UPDATE_LATER;
             ui_menu_open(&xmb, items, 2);
-            snprintf(xmb.menu.title, sizeof xmb.menu.title, "Update %.15s is out", update_info.version);
+            snprintf(xmb.menu.title, sizeof xmb.menu.title,
+                     prefs[PREF_LANGUAGE] ? "%.15s güncellemesi hazır" : "Update %.15s is out",
+                     update_info.version);
         } else if (update_state == UPDATE_AVAILABLE) {
             char note[64];
-            snprintf(note, sizeof note, "Update %.15s: Settings \xE2\x86\x92 About", update_info.version);
+            snprintf(note, sizeof note,
+                     prefs[PREF_LANGUAGE] ? "%.15s güncellemesi: Ayarlar → Hakkında"
+                                          : "Update %.15s: Settings → About",
+                     update_info.version);
             ui_toast(&xmb, note);
         } else if (!update_auto) {
             ui_toast(&xmb, update_state == UPDATE_CURRENT ? "Up to date" : "Couldn't check for updates");
@@ -2248,7 +2253,9 @@ static void site_finished(void)
             menu_actions[0] = MENU_QUIT;
             menu_actions[1] = MENU_QUIT_LATER;
             ui_menu_open(&xmb, items, 2);
-            snprintf(xmb.menu.title, sizeof xmb.menu.title, "%.15s is installed", update_info.version);
+            snprintf(xmb.menu.title, sizeof xmb.menu.title,
+                     prefs[PREF_LANGUAGE] ? "%.15s yüklendi" : "%.15s is installed",
+                     update_info.version);
         } else {
             ui_toast(&xmb, update_state == UPDATE_INSTALLED ? "Updated: the new version starts next time"
                                                             : "Update failed, nothing changed");
