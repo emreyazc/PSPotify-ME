@@ -816,9 +816,15 @@ static int sp_tracks_unlocked(const char *client_token, const char *access_token
     if (!playlist_id[0]) return sp_liked_unlocked(client_token, access_token, username, out, max);
     static char url[160];
     if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s", playlist_id);
+    /* Include item attributes so playlist entries carry their add timestamps. */
+    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s?decorate=attributes", playlist_id);
     size_t len = 0;
     int status = sp_get(url, &len);
+    if (status != 200) {
+        /* Fall back to the original request if decoration is unsupported. */
+        snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s", playlist_id);
+        status = sp_get(url, &len);
+    }
     if (status != 200) return status < 0 ? status : -status;
     const uint8_t *contents;
     size_t contents_len;
@@ -851,6 +857,9 @@ static int sp_tracks_unlocked(const char *client_token, const char *access_token
             ++count;
         }
     }
+    int dated = 0;
+    for (int i = 0; i < count; ++i) if (out[i].added_at) ++dated;
+    log_printf("PLAYLIST: %d tracks, %d add timestamps available\n", count, dated);
     return count;
 }
 
