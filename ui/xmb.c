@@ -437,10 +437,12 @@ static void draw_top(const ui_state *ui)
         char percentage[8];
         snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
         const float text_w = font_width(FONT_BOLD, 10, percentage);
+        /* Reserve the widest percentage so the icon and bar never shift. */
+        const float percentage_w = font_width(FONT_BOLD, 10, "100%");
         const float bar_w = 70.0f;
         const float gap = 9.0f;
         const float icon_w = 12.0f;
-        const float volume_x = right - (icon_w + gap + bar_w + gap + text_w);
+        const float volume_x = right - (icon_w + gap + bar_w + gap + percentage_w);
         const float bar_x = volume_x + icon_w + gap;
         font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
                   12, volume_x, 5.0f, color_fade(t->dim, alpha));
@@ -449,7 +451,8 @@ static void draw_top(const ui_state *ui)
         if (ui->volume > 0)
             draw_round_rect(bar_x, 10.0f, bar_w * (float)ui->volume / 100.0f,
                             4.0f, 2.0f, color_fade(0xFF1DB954u, alpha));
-        font_draw(FONT_BOLD, 10, bar_x + bar_w + gap, 3.0f,
+        /* Right-align within the fixed slot; 100% fills it completely. */
+        font_draw(FONT_BOLD, 10, bar_x + bar_w + gap + percentage_w - text_w, 3.0f,
                   color_fade(t->text, alpha), percentage);
     }
 }
