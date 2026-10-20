@@ -25,8 +25,8 @@ static const char *const hint_names[] = { "Shown", "Hidden" };
 static const char *const hint_tokens[] = { "shown", "hidden" };
 /* The order of ui.c's start_categories[]. */
 static const char *const start_names[] = { "Playlists", "Liked Songs", "Search", "Recent",
-                                           "Now Playing" };
-static const char *const start_tokens[] = { "playlists", "liked", "search", "recent", "now" };
+                                           "Now Playing", "My Playlists" };
+static const char *const start_tokens[] = { "playlists", "liked", "search", "recent", "now", "my_playlists" };
 static const char *const now_names[] = { "Classic", "Centered", "Text only" };
 static const char *const now_tokens[] = { "classic", "centered", "text" };
 static const char *const sort_names[] = { "Spotify order", "Name", "Most songs" };
