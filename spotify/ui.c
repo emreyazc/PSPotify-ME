@@ -595,22 +595,22 @@ static void fill_groups(void)
             continue;
         ui_row *r = &group_rows[group_count];
         memset(r, 0, sizeof *r);
-        copy_text(r->title, sizeof r->title, group_info[g].title);
+        copy_text(r->title, sizeof r->title, ui_tr(group_info[g].title));
         if (g == PREF_GROUP_THEMES && theme_active >= 0)
             snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 %d installed",
                      theme_names[theme_active], theme_count);
         else if (g == PREF_GROUP_ABOUT && update_state == UPDATE_AVAILABLE)
             snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out", update_info.version);
         else
-            copy_text(r->subtitle, sizeof r->subtitle, group_info[g].subtitle);
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(group_info[g].subtitle));
         r->icon = group_info[g].icon;
         r->color = group_info[g].color;
         group_view[group_count++] = g;
     }
     ui_row *quit = &group_rows[group_count];
     memset(quit, 0, sizeof *quit);
-    copy_text(quit->title, sizeof quit->title, "Quit");
-    copy_text(quit->subtitle, sizeof quit->subtitle, "Back to the PSP menu (START does it too)");
+    copy_text(quit->title, sizeof quit->title, ui_tr("Quit"));
+    copy_text(quit->subtitle, sizeof quit->subtitle, ui_tr("Back to the PSP menu (START does it too)"));
     quit->icon = ICON_POWER;
     quit->color = 0xFF475569u;
     group_view[group_count++] = GROUP_QUIT;
@@ -631,7 +631,7 @@ static void fill_options(void)
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
             copy_text(r->title, sizeof r->title, theme_names[k]);
-            snprintf(r->subtitle, sizeof r->subtitle, "%s%s", k == theme_active ? "Active" : "Theme",
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s", ui_tr(k == theme_active ? "Active" : "Theme"),
                      theme_wallpaper[k] ? " \xC2\xB7 has a wallpaper" : "");
             r->icon = ICON_PALETTE;
             r->color = theme_swatch[k];
@@ -642,8 +642,8 @@ static void fill_options(void)
         if (gallery_count == -2) {
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, "Couldn't reach the theme site");
-            copy_text(r->subtitle, sizeof r->subtitle, "Check the Wi-Fi \xC2\xB7 select to try again");
+            copy_text(r->title, sizeof r->title, ui_tr("Couldn't reach the theme site"));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Check the Wi-Fi \xC2\xB7 select to try again"));
             r->icon = ICON_IMAGES;
             r->color = 0xFF3A3F4Au;
             option_view[n++] = -1;
@@ -669,8 +669,8 @@ static void fill_options(void)
         memset(r, 0, sizeof *r);
         snprintf(r->title, sizeof r->title, "PSPotify ME %s", PSPOTIFY_VERSION);
         switch (update_state) {
-        case UPDATE_CHECKING: copy_text(r->subtitle, sizeof r->subtitle, "Checking for updates\xE2\x80\xA6"); break;
-        case UPDATE_CURRENT: copy_text(r->subtitle, sizeof r->subtitle, "Up to date"); break;
+        case UPDATE_CHECKING: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Checking for updates\xE2\x80\xA6")); break;
+        case UPDATE_CURRENT: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Up to date")); break;
         case UPDATE_AVAILABLE:
             snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out \xC2\xB7 select to install",
                      update_info.version);
@@ -689,7 +689,7 @@ static void fill_options(void)
         case UPDATE_INSTALL_FAILED:
             copy_text(r->subtitle, sizeof r->subtitle, "Update failed, nothing changed \xC2\xB7 select to try again");
             break;
-        default: copy_text(r->subtitle, sizeof r->subtitle, "Select to check for updates"); break;
+        default: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Select to check for updates")); break;
         }
         r->icon = update_state == UPDATE_AVAILABLE ? ICON_DOWNLOAD
                 : update_state == UPDATE_INSTALLED ? ICON_POWER : ICON_INFO;
@@ -697,8 +697,8 @@ static void fill_options(void)
         option_view[n++] = 0;
         r = &option_rows[n];
         memset(r, 0, sizeof *r);
-        copy_text(r->title, sizeof r->title, pref_info(PREF_CHECK_UPDATES)->label);
-        copy_text(r->subtitle, sizeof r->subtitle, pref_value_name(PREF_CHECK_UPDATES));
+        copy_text(r->title, sizeof r->title, ui_tr(pref_info(PREF_CHECK_UPDATES)->label));
+        copy_text(r->subtitle, sizeof r->subtitle, ui_tr(pref_value_name(PREF_CHECK_UPDATES)));
         r->icon = ICON_INFO;
         r->color = prefs[PREF_CHECK_UPDATES] ? xmb.theme_target.accent : 0xFF3A3F4Au;
         option_view[n++] = 1;
@@ -707,9 +707,9 @@ static void fill_options(void)
             const int c = cat_all[i];
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, cat_titles[c]);
-            copy_text(r->subtitle, sizeof r->subtitle, c == UI_CAT_SETTINGS ? "Always shown"
-                      : cat_hidden[c] ? "Hidden" : "Shown");
+            copy_text(r->title, sizeof r->title, ui_tr(cat_titles[c]));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(c == UI_CAT_SETTINGS ? "Always shown"
+                      : cat_hidden[c] ? "Hidden" : "Shown"));
             r->icon = cat_icon[c];
             r->color = cat_hidden[c] && c != UI_CAT_SETTINGS ? 0xFF3A3F4Au : xmb.theme_target.accent;
             option_view[n++] = c;
@@ -720,25 +720,28 @@ static void fill_options(void)
             if (d->group != g) continue;
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, d->label);
-            copy_text(r->subtitle, sizeof r->subtitle, pref_value_name((pref_id)i));
+            copy_text(r->title, sizeof r->title, ui_tr(d->label));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(pref_value_name((pref_id)i)));
             if (i == PREF_BACKGROUND && prefs[i] == BACKGROUND_WALLPAPER && !base_theme.wallpaper[0])
-                copy_text(r->subtitle, sizeof r->subtitle, "Theme wallpaper (this theme has none)");
+                copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Theme wallpaper (this theme has none)"));
             if (i == PREF_SLEEP && prefs[i] && sleep_deadline) {
                 const SceUInt64 now = sceKernelGetSystemTimeWide();
                 const unsigned left = sleep_deadline > now
                     ? (unsigned)((sleep_deadline - now) / 60000000u) + 1u : 0u;
-                snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 %s in %u min",
-                         pref_value_name((pref_id)i),
-                         prefs[PREF_SLEEP_ACTION] == SLEEP_POWER_OFF ? "turns off" : "pauses", left);
+                snprintf(r->subtitle, sizeof r->subtitle, prefs[PREF_LANGUAGE]
+                         ? "%s · %s: %u dk" : "%s · %s in %u min",
+                         ui_tr(pref_value_name((pref_id)i)),
+                         prefs[PREF_SLEEP_ACTION] == SLEEP_POWER_OFF
+                             ? ui_tr("Turn off the PSP") : ui_tr("Pause"), left);
             }
             if (i >= PREF_EQ_60 && i <= PREF_EQ_14K && prefs[PREF_EQUALIZER] != PLAYER_EQ_CUSTOM)
-                snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 used by Custom",
+                snprintf(r->subtitle, sizeof r->subtitle,
+                         prefs[PREF_LANGUAGE] ? "%s · Özel ekolayzır" : "%s · used by Custom",
                          pref_value_name((pref_id)i));
             option_view[n++] = i;
         }
     }
-    copy_text(l->header, sizeof l->header, group_info[g].title);
+    copy_text(l->header, sizeof l->header, ui_tr(group_info[g].title));
     l->rows = option_rows;
     l->count = n;
     const int own_list = g == PREF_GROUP_THEMES || g == PREF_GROUP_CATEGORIES ||
@@ -841,6 +844,7 @@ static void load_settings(void)
         fclose(f);
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
+    ui_set_language(prefs[PREF_LANGUAGE]);
     liked_visible_limit = opened_visible_limit = songs_page_size();
     liked_load_target = liked_visible_limit;
     open_load_target = opened_visible_limit;
@@ -2286,6 +2290,11 @@ static void pref_changed(pref_id id)
     case PREF_PLAYLIST_SORT:
         arrange_playlists();
         break;
+    case PREF_LANGUAGE:
+        ui_set_language(prefs[PREF_LANGUAGE]);
+        arrange_playlists();
+        fill_settings();
+        break;
     case PREF_SONGS_PER_LOAD:
         liked_visible_limit = opened_visible_limit = songs_page_size();
         liked_load_target = liked_reorder_pending ? liked_count : liked_visible_limit;
@@ -2616,11 +2625,15 @@ static void arrange_playlists(void)
         ui_row *r = &playlist_rows[i];
         memset(r, 0, sizeof *r);
         copy_text(r->title, sizeof r->title, p->name);
-        const char *pin = pin_index(p->id) >= 0 ? "Pinned \xC2\xB7 " : "";
+        const int pinned_playlist = pin_index(p->id) >= 0;
         if (p->total >= 0)
-            snprintf(r->subtitle, sizeof r->subtitle, "%sPlaylist \xC2\xB7 %d songs", pin, p->total);
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%sÇalma listesi · %d şarkı" : "%sPlaylist · %d songs",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "", p->total);
         else
-            snprintf(r->subtitle, sizeof r->subtitle, "%sPlaylist", pin);
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "",
+                     ui_tr("Playlist"));
         r->color = row_color(p->name);
     }
     xmb.lists[UI_CAT_PLAYLISTS][0].rows = playlist_rows;
