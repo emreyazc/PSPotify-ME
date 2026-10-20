@@ -33,6 +33,7 @@ typedef enum {
     PREF_CLOCK,
     PREF_HINTS,
     PREF_VISUALIZER,
+    PREF_LANGUAGE,
     /* Layout */
     PREF_START,
     PREF_NOW_LAYOUT,
