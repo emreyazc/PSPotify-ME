@@ -77,6 +77,7 @@ static volatile int liked_load_target;
 static int opened_visible_limit;
 static int ctx_visible_limit;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
+static int liked_reorder_pending;
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
 static volatile int open_total_count, open_load_target;
@@ -1673,9 +1674,8 @@ static void refresh_sorted_tracks(void)
         mark_playing(queue[current_index].id);
 }
 
-/* Reveal the next configured page near the bottom of the selected song list.
- * The first milestone pages existing rows; later the loader will fetch details
- * only for requested pages and remove the old 500-track collection cap. */
+/* Request the next metadata page near the end of the visible list.
+ * The total collection cap is still 500 until cursor-based paging lands. */
 static void maybe_expand_visible_tracks(void)
 {
     int *limit = NULL;
@@ -1710,8 +1710,15 @@ static void maybe_expand_visible_tracks(void)
 /* Picks up finished list loads and covers, and mirrors the player state. */
 static void sync_state(void)
 {
+    const int liked_needs_all_names = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                                      prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST;
     if (liked_done && !liked_sort_applied) {
         refresh_sorted_tracks();
+        liked_reorder_pending = 0;
+    } else if (!liked_done && (liked_reorder_pending || liked_needs_all_names)) {
+        /* Never display a partly sorted title/artist list. */
+        liked_shown = 0;
+        xmb.lists[UI_CAT_LIKED][0].count = 0;
     } else if (visible_tracks(liked_ready, liked_visible_limit) > liked_shown) {
         const int ready = visible_tracks(liked_ready, liked_visible_limit);
         track_rows(&liked[liked_shown], ready - liked_shown, &liked_rows[liked_shown]);
@@ -1721,7 +1728,8 @@ static void sync_state(void)
         const int playing = current_index;
         if (playing >= 0 && playing < queue_len) mark_playing(queue[playing].id);
     }
-    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done && liked_ready < liked_visible_limit;
+    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done &&
+        (liked_reorder_pending || liked_needs_all_names || liked_ready < liked_visible_limit);
     ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
         sort_tracks(opened, open_done_count);
@@ -1769,6 +1777,8 @@ static void sync_state(void)
         track_rows(&opened[open_list->count], count - open_list->count,
                    &opened_rows[open_list->count]);
         open_list->count = count;
+        if (current_index >= 0 && current_index < queue_len)
+            mark_playing(queue[current_index].id);
     }
     ui_list *ctx_list = &xmb.lists[UI_CAT_RECENT][1];
     if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq &&
@@ -1777,6 +1787,8 @@ static void sync_state(void)
         track_rows(&ctx_tracks[ctx_list->count], count - ctx_list->count,
                    &ctx_rows[ctx_list->count]);
         ctx_list->count = count;
+        if (current_index >= 0 && current_index < queue_len)
+            mark_playing(queue[current_index].id);
     }
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
     if (search_done_seq == search_req_seq && search_shown_seq != search_done_seq) {
@@ -2387,9 +2399,26 @@ static void pref_changed(pref_id id)
         refresh_sorted_tracks();
         break;
     case PREF_TRACK_SORT:
-        /* Complete any partially fetched Liked Songs list before reordering
-         * so switching sort modes cannot leave an unsorted unloaded tail. */
-        if (liked_ids_loaded && !liked_done) liked_load_target = liked_count;
+        /* Finish partially loaded Liked Songs before switching sort order. */
+        if (liked_ids_loaded && !liked_done) {
+            liked_load_target = liked_count;
+            liked_reorder_pending = 1;
+        }
+        /* Reopen the other lists: their not-yet-fetched suffix is still in
+         * the previous order and must be sorted before metadata is loaded. */
+        if (open_req_playlist > 0 && xmb.level[UI_CAT_PLAYLISTS] == 1) {
+            opened_visible_limit = open_load_target = songs_page_size();
+            xmb.lists[UI_CAT_PLAYLISTS][1].count = 0;
+            xmb.lists[UI_CAT_PLAYLISTS][1].loading = 1;
+            ++open_req_seq;
+        }
+        if (ctx_req_index >= 0 && ctx_req_index < recent_count &&
+            xmb.level[UI_CAT_RECENT] == 1 && recent_tracks_sortable()) {
+            ctx_visible_limit = ctx_load_target = songs_page_size();
+            xmb.lists[UI_CAT_RECENT][1].count = 0;
+            xmb.lists[UI_CAT_RECENT][1].loading = 1;
+            ++ctx_req_seq;
+        }
         refresh_sorted_tracks();
         /* A subsequent play request must rebuild its queue in the new order. */
         queue_key = -2;
