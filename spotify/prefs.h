@@ -38,6 +38,7 @@ typedef enum {
     PREF_NOW_LAYOUT,
     PREF_PLAYLIST_SORT,
     PREF_TRACK_SORT,
+    PREF_SONGS_PER_LOAD,
     /* Sound */
     PREF_EQUALIZER,
     PREF_EQ_60,             /* the five custom equalizer bands, in order */
