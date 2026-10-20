@@ -17,6 +17,33 @@ const char *ui_tr(const char *english)
     if (!english || !ui_language) return english;
     static const struct { const char *en, *tr; } messages[] = {
         { "Search", "Ara" },
+        { "%d results", "%d sonuç" },
+        { "↑↓ Move", "↑↓ Taşı" },
+        { "↑↓ Vol", "↑↓ Ses" },
+        { "SELECT Move", "SELECT Taşı" },
+        { "Installed · select to download again", "Yüklü · tekrar indirmek için seç" },
+        { "Couldn't check · select to try again", "Kontrol edilemedi · tekrar dene" },
+        { "Update failed, nothing changed · select to try again", "Güncelleme başarısız · tekrar dene" },
+        { "Couldn't play: not enough memory", "Çalınamadı: yetersiz bellek" },
+        { "Spotify refused this track (Premium needed?)", "Spotify şarkıyı reddetti (Premium gerekli mi?)" },
+        { "No playable version of this track", "Çalınabilir sürüm bulunamadı" },
+        { "Couldn't play this track", "Şarkı çalınamadı" },
+        { "Loading your library…", "Kütüphanen yükleniyor…" },
+        { "Stopping…", "Kapatılıyor…" },
+        { "Could not sign in to Spotify", "Spotify oturumu açılamadı" },
+        { "Good night", "İyi geceler" },
+        { "Downloading the update…", "Güncelleme indiriliyor…" },
+        { "This theme has no wallpaper", "Bu temada duvar kâğıdı yok" },
+        { "Shows once a song with a cover plays", "Kapaklı şarkı çalınca gösterilir" },
+        { "Sleep timer: paused", "Uyku sayacı: duraklatıldı" },
+        { "16 themes at most: remove one from THEMES", "En fazla 16 tema: THEMES'den birini sil" },
+        { "Still busy: try in Settings → About", "Meşgul: Ayarlar → Hakkında'dan dene" },
+        { "Settings → About installs it later", "Sonra Ayarlar → Hakkında'dan yükleyebilirsin" },
+        { "Updated: the new version starts next time", "Güncellendi: yeni sürüm sonraki açılışta başlar" },
+        { "The PSP turns off when the timer ends", "Sayaç bitince PSP kapanır" },
+        { "Playback pauses when the timer ends", "Sayaç bitince oynatma duraklar" },
+        { "This theme has no wallpaper", "Bu temada duvar kâğıdı yok" },
+
         { "Recent", "Son Dinlenenler" },
         { "Liked Songs", "Beğenilen Şarkılar" },
         { "Playlists", "Çalma Listeleri" },
@@ -199,7 +226,7 @@ static const char *const cat_names[UI_CATS] = {
 };
 static const unsigned cat_icons[UI_CATS] = {
     ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
-    ICON_LIST_MUSIC
+    ICON_USER
 };
 
 static float clampf(float v, float lo, float hi)
@@ -551,7 +578,8 @@ static void draw_top(const ui_state *ui)
     const unsigned ok = ui->style.swap_confirm ? ICON_CIRCLE : ICON_CROSS;
     const unsigned back = ui->style.swap_confirm ? ICON_CROSS : ICON_CIRCLE;
     if (ui->moving) {
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "\xE2\x86\x91\xE2\x86\x93 Move") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim,
+                       ui_tr("\xE2\x86\x91\xE2\x86\x93 Move")) + 10;
         hint(&x, ok, "Done", t->dim);
         cat = -1;
     } else if (ui->style.hide_hints) {
@@ -561,7 +589,7 @@ static void draw_top(const ui_state *ui)
         hint(&x, ok, "Change", t->dim);
         hint(&x, back, "Back", t->dim);
         if (ui->lists[cat][lvl].movable)
-            x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "SELECT Move") + 10;
+            x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, ui_tr("SELECT Move")) + 10;
         cat = -1;
     }
     switch (cat) {
@@ -570,7 +598,7 @@ static void draw_top(const ui_state *ui)
     case UI_CAT_QUEUE:
         hint(&x, ok, "Play", t->dim);
         hint(&x, ICON_TRIANGLE, "Options", t->dim);
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "SELECT Move") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, ui_tr("SELECT Move")) + 10;
         break;
     case UI_CAT_SEARCH:
         hint(&x, ok, "Play", t->dim);
@@ -581,7 +609,8 @@ static void draw_top(const ui_state *ui)
         hint(&x, ICON_SQUARE, ui->now.paused ? "Play" : "Pause", t->dim);
         hint(&x, ok, "Repeat", t->dim);
         hint(&x, ICON_TRIANGLE, "Shuffle", t->dim);
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "\xE2\x86\x91\xE2\x86\x93 Vol") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim,
+                       ui_tr("\xE2\x86\x91\xE2\x86\x93 Vol")) + 10;
         break;
     case UI_CAT_RECENT:
         hint(&x, ok, "Play", t->dim);
@@ -774,8 +803,8 @@ static void draw_search(const ui_state *ui, float bottom, float alpha, float sli
         font_draw_fit(FONT_REGULAR, 12, x + 32, y + 5, color_fade(t->text, alpha), ui->search_query,
                       w - 110);
         char count[24];
-        if (results->loading) snprintf(count, sizeof count, "Searching\xE2\x80\xA6");
-        else snprintf(count, sizeof count, "%d results", results->count);
+        if (results->loading) snprintf(count, sizeof count, "%s", ui_tr("Searching…"));
+        else snprintf(count, sizeof count, ui_tr("%d results"), results->count);
         float cw = font_width(FONT_REGULAR, 10, count);
         font_draw(FONT_REGULAR, 10, x + w - 12 - cw, y + 7, color_fade(t->dim, alpha), count);
         const list_style st = style_for(ui, 1);
