@@ -18,6 +18,17 @@ const char *ui_tr(const char *english)
     static const struct { const char *en, *tr; } messages[] = {
         { "Search", "Ara" },
         { "%d results", "%d sonuç" },
+        { "Install now", "Şimdi yükle" },
+        { "Not now", "Şimdi değil" },
+        { "Quit now and start it again", "Şimdi çık ve yeniden aç" },
+        { "Later", "Sonra" },
+        { "Select to download", "İndirmek için seç" },
+        { "Theme installed", "Tema yüklendi" },
+        { "Couldn't download the theme", "Tema indirilemedi" },
+        { "Couldn't check for updates", "Güncellemeler kontrol edilemedi" },
+        { "Update failed, nothing changed", "Güncelleme başarısız, değişiklik yapılmadı" },
+        { "Play", "Çal" },
+
         { "↑↓ Move", "↑↓ Taşı" },
         { "↑↓ Vol", "↑↓ Ses" },
         { "SELECT Move", "SELECT Taşı" },
