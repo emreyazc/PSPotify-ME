@@ -987,7 +987,9 @@ static int loader_thread(SceSize args, void *argp)
         if (ctx_seq != ctx_done_seq) {
             int i = ctx_req_index;
             ctx_total_count = load_context(i);
-            ctx_done_count = visible_tracks(ctx_total_count, ctx_load_target);
+            /* Do not publish rows whose details have not been fetched yet.
+             * Settings can change the requested page size during the HTTP call. */
+            ctx_done_count = visible_tracks(ctx_fetched_count, ctx_load_target);
             ctx_done_seq = ctx_seq;
             log_printf("UI: %d songs in recent context %d (first %d)\n",
                        ctx_total_count, i, ctx_done_count);
@@ -1033,7 +1035,8 @@ static int loader_thread(SceSize args, void *argp)
         if (seq != open_done_seq) {
             int p = open_req_playlist;
             open_total_count = load_list(playlists[p].id, opened);
-            open_done_count = visible_tracks(open_total_count, open_load_target);
+            /* A larger page can be requested while the initial load runs. */
+            open_done_count = visible_tracks(open_fetched_count, open_load_target);
             open_done_playlist = p;
             open_done_seq = seq;
             log_printf("UI: %d tracks in playlist %d (first %d)\n",
@@ -2402,16 +2405,17 @@ static void pref_changed(pref_id id)
             liked_load_target = liked_count;
             liked_reorder_pending = 1;
         }
-        /* Reopen the other lists: their not-yet-fetched suffix is still in
-         * the previous order and must be sorted before metadata is loaded. */
-        if (open_req_playlist > 0 && xmb.level[UI_CAT_PLAYLISTS] == 1) {
+        /* The loaded prefix alone cannot be re-sorted: unseen songs from
+         * later pages might belong ahead of it. Reload the complete index
+         * even when the playlist screen is not currently visible. */
+        if (open_req_seq != 0 && open_req_playlist > 0) {
             opened_visible_limit = open_load_target = songs_page_size();
             xmb.lists[UI_CAT_PLAYLISTS][1].count = 0;
             xmb.lists[UI_CAT_PLAYLISTS][1].loading = 1;
             ++open_req_seq;
         }
-        if (ctx_req_index >= 0 && ctx_req_index < recent_count &&
-            xmb.level[UI_CAT_RECENT] == 1 && recent_tracks_sortable()) {
+        if (ctx_req_seq != 0 && ctx_req_index >= 0 &&
+            ctx_req_index < recent_count && recent_tracks_sortable()) {
             ctx_visible_limit = ctx_load_target = songs_page_size();
             xmb.lists[UI_CAT_RECENT][1].count = 0;
             xmb.lists[UI_CAT_RECENT][1].loading = 1;
