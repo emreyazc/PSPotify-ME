@@ -1134,47 +1134,32 @@ static int sp_search_unlocked(const char *client_token, const char *access_token
     return count;
 }
 
-static int sp_recent_unlocked(const char *client_token, const char *access_token,
-                              const char *username, spotify_context *out, int max)
+/* Spotify's internal recently-played response contains song URIs when the
+ * 'track' filter is requested. Collect those URI occurrences in response
+ * order, not playback contexts (albums, artists or playlists). Like Search,
+ * the lightweight scanner ignores non-track URIs and duplicates.
+ *
+ * This spclient endpoint is undocumented. Log the number found so a schema
+ * change is visible in spotify.log instead of silently showing contexts. */
+static int sp_recent_tracks_unlocked(const char *client_token, const char *access_token,
+                                     const char *username, spotify_track *out, int max)
 {
     static char url[256];
     if (sp_headers(client_token, access_token, "application/json") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/recently-played/v3/user/%s/recently-played"
-             "?format=json&offset=0&limit=50&filter=default", username);
+    int n = snprintf(url, sizeof url,
+                     SPCLIENT "/recently-played/v3/user/%s/recently-played"
+                     "?format=json&offset=0&limit=50&filter=default,track", username);
+    if (n <= 0 || (size_t)n >= sizeof url) return -1;
     size_t len = 0;
     int status = sp_get(url, &len);
-    if (status != 200) return status < 0 ? status : -status;
-    /* Every context appears as "uri":"spotify:<kind>:..." in the reply. */
-    static const char *const kinds[] = { "spotify:playlist:", "spotify:album:", "spotify:artist:",
-                                         "spotify:user:" };
-    int count = 0;
-    for (size_t i = 0; i + 16 < len && count < max; ++i) {
-        if (memcmp(resp_buf + i, "\"spotify:", 9) != 0) continue;
-        const char *start = (const char *)resp_buf + i + 1;
-        const char *end = memchr(start, '"', len - i - 1);
-        if (!end || end - start >= (long)sizeof out[0].uri) continue;
-        size_t n = (size_t)(end - start);
-        int known = 0;
-        for (size_t k = 0; k < sizeof kinds / sizeof kinds[0]; ++k)
-            known |= strncmp(start, kinds[k], strlen(kinds[k])) == 0;
-        /* spotify:user:<name>:collection is Liked Songs; other user URIs
-         * (profiles) are not playable contexts. */
-        if (known && strncmp(start, "spotify:user:", 13) == 0 &&
-            (n < 11 || memcmp(end - 11, ":collection", 11) != 0))
-            known = 0;
-        if (!known) continue;
-        int seen = 0;
-        for (int k = 0; k < count && !seen; ++k)
-            seen = strlen(out[k].uri) == n && memcmp(out[k].uri, start, n) == 0;
-        if (!seen) {
-            memcpy(out[count].uri, start, n);
-            out[count].uri[n] = '\0';
-            out[count].name[0] = '\0';
-            ++count;
-        }
-        i += n;
+    if (status != 200) {
+        log_printf("RECENT: history HTTP %d\n", status);
+        return status < 0 ? status : -status;
     }
-    log_printf("RECENT: %d contexts (%u bytes)\n", count, (unsigned int)len);
+    int count = scan_track_ids(len, out, max);
+    for (int i = 0; i < count; ++i) out[i].source_index = i;
+    log_printf("RECENT: %d recently played tracks (%u bytes)\n",
+               count, (unsigned int)len);
     return count;
 }
 
@@ -1254,11 +1239,11 @@ int spotify_sp_like(const char *client_token, const char *access_token, const ch
     return status;
 }
 
-int spotify_sp_recent(const char *client_token, const char *access_token,
-                      const char *username, spotify_context *out, int max)
+int spotify_sp_recent_tracks(const char *client_token, const char *access_token,
+                            const char *username, spotify_track *out, int max)
 {
     lock();
-    int r = sp_recent_unlocked(client_token, access_token, username, out, max);
+    int r = sp_recent_tracks_unlocked(client_token, access_token, username, out, max);
     unlock();
     return r;
 }
