@@ -29,6 +29,12 @@ static const char *const now_names[] = { "Classic", "Centered", "Text only" };
 static const char *const now_tokens[] = { "classic", "centered", "text" };
 static const char *const sort_names[] = { "Spotify order", "Name", "Most songs" };
 static const char *const sort_tokens[] = { "spotify", "name", "size" };
+static const char *const track_sort_names[] = {
+    "Newest first", "Oldest first", "Spotify order", "Title A-Z", "Artist A-Z"
+};
+static const char *const track_sort_tokens[] = {
+    "newest", "oldest", "spotify", "title", "artist"
+};
 /* player_eq_names, then the user's own. */
 static const char *const eq_names[PLAYER_EQ_PRESETS + 1] = {
     "Off", "Bass boost", "Treble boost", "Vocal", "Rock", "Pop", "Loudness", "Custom"
@@ -79,6 +85,8 @@ static pref_def defs[PREF_COUNT] = {
                                now_tokens, 0),
     [PREF_PLAYLIST_SORT] = CHOICE("playlist_sort", "Sort playlists", PREF_GROUP_LAYOUT,
                                   sort_names, sort_tokens, 0),
+    [PREF_TRACK_SORT] = CHOICE("track_sort", "Sort songs", PREF_GROUP_LAYOUT,
+                               track_sort_names, track_sort_tokens, TRACK_SORT_NEWEST),
     [PREF_EQUALIZER] = CHOICE("equalizer", "Equalizer", PREF_GROUP_SOUND, eq_names, NULL, 0),
     [PREF_EQ_60] = BAND("eq_60", "60 Hz (bass)"),
     [PREF_EQ_230] = BAND("eq_230", "230 Hz"),
