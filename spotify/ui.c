@@ -1626,7 +1626,7 @@ static void refresh_sorted_tracks(void)
         track_rows(liked, liked_shown, liked_rows);
         xmb.lists[UI_CAT_LIKED][0].rows = liked_rows;
         xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
-        liked_sort_applied = 1;
+        liked_sort_applied = liked_done;
     }
     ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
     if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq) {
@@ -2350,7 +2350,7 @@ static void pref_changed(pref_id id)
     case PREF_TRACK_SORT:
         /* Complete any partially fetched Liked Songs list before reordering
          * so switching sort modes cannot leave an unsorted unloaded tail. */
-        if (!liked_done) liked_load_target = liked_count;
+        if (liked_ids_loaded && !liked_done) liked_load_target = liked_count;
         refresh_sorted_tracks();
         /* A subsequent play request must rebuild its queue in the new order. */
         queue_key = -2;
