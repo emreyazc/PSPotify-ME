@@ -35,6 +35,8 @@ static const char *const track_sort_names[] = {
 static const char *const track_sort_tokens[] = {
     "newest", "oldest", "spotify", "title", "artist"
 };
+static const char *const songs_per_load_names[] = { "25 songs", "50 songs", "75 songs", "100 songs" };
+static const char *const songs_per_load_tokens[] = { "25", "50", "75", "100" };
 /* player_eq_names, then the user's own. */
 static const char *const eq_names[PLAYER_EQ_PRESETS + 1] = {
     "Off", "Bass boost", "Treble boost", "Vocal", "Rock", "Pop", "Loudness", "Custom"
@@ -87,6 +89,8 @@ static pref_def defs[PREF_COUNT] = {
                                   sort_names, sort_tokens, 0),
     [PREF_TRACK_SORT] = CHOICE("track_sort", "Sort songs", PREF_GROUP_LAYOUT,
                                track_sort_names, track_sort_tokens, TRACK_SORT_NEWEST),
+    [PREF_SONGS_PER_LOAD] = CHOICE("songs_per_load", "Songs per load", PREF_GROUP_LAYOUT,
+                                   songs_per_load_names, songs_per_load_tokens, 3),
     [PREF_EQUALIZER] = CHOICE("equalizer", "Equalizer", PREF_GROUP_SOUND, eq_names, NULL, 0),
     [PREF_EQ_60] = BAND("eq_60", "60 Hz (bass)"),
     [PREF_EQ_230] = BAND("eq_230", "230 Hz"),
