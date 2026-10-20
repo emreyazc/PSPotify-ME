@@ -17,10 +17,12 @@
 #define SEEK_HOLD 0.45f     /* L/R held longer than this seeks */
 
 static const char *const cat_names[UI_CATS] = {
-    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings"
+    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings",
+    "My Playlists"
 };
 static const unsigned cat_icons[UI_CATS] = {
-    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS
+    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
+    ICON_LIST_MUSIC
 };
 
 static float clampf(float v, float lo, float hi)
@@ -405,14 +407,15 @@ static void draw_top(const ui_state *ui)
         x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "\xE2\x86\x91\xE2\x86\x93 Vol") + 10;
         break;
     case UI_CAT_RECENT:
-        hint(&x, ok, lvl == 0 ? "Open" : "Play", t->dim);
-        if (lvl > 0) hint(&x, back, "Back", t->dim);
+        hint(&x, ok, "Play", t->dim);
+        hint(&x, ICON_TRIANGLE, "Options", t->dim);
         break;
     case UI_CAT_SETTINGS:
         hint(&x, ok, lvl == 0 ? "Open" : "Select", t->dim);
         if (lvl > 0) hint(&x, back, "Back", t->dim);
         break;
     case UI_CAT_PLAYLISTS:
+    case UI_CAT_MY_PLAYLISTS:
         hint(&x, ok, lvl == 0 ? "Open" : "Play", t->dim);
         if (lvl > 0) hint(&x, back, "Back", t->dim);
         hint(&x, ICON_TRIANGLE, lvl == 0 ? "Pin" : "Options", t->dim);
