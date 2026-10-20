@@ -68,6 +68,7 @@ static ui_row liked_rows[MAX_TRACKS], opened_rows[MAX_TRACKS];
  * rows. */
 static volatile int liked_done, liked_count, liked_ready, liked_ids_loaded;
 static int liked_shown;
+static int liked_sort_applied;    /* final sort after the loader finishes metadata */
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
 
@@ -1514,6 +1515,45 @@ static void assign_thumbs(void)
 
 /* ------------------------------------------------------------ UI thread */
 
+/* Sort only the in-memory tracks, never modify the Spotify playlist.
+ * Preserve source_index so switching back to Spotify order is lossless.
+ * Missing timestamps sort last; ties retain the source order. */
+static int name_order(const char *a, const char *b);
+
+static int track_compare(const void *left, const void *right)
+{
+    const spotify_track *a = (const spotify_track *)left;
+    const spotify_track *b = (const spotify_track *)right;
+    int result = 0;
+    switch (prefs[PREF_TRACK_SORT]) {
+    case TRACK_SORT_NEWEST:
+    case TRACK_SORT_OLDEST:
+        if (a->added_at != b->added_at) {
+            if (!a->added_at) return 1;
+            if (!b->added_at) return -1;
+            result = a->added_at > b->added_at ? 1 : -1;
+            if (prefs[PREF_TRACK_SORT] == TRACK_SORT_NEWEST) result = -result;
+        }
+        break;
+    case TRACK_SORT_TITLE:
+        result = name_order(a->name, b->name);
+        break;
+    case TRACK_SORT_ARTIST:
+        result = name_order(a->artist, b->artist);
+        if (!result) result = name_order(a->name, b->name);
+        break;
+    default:
+        break;
+    }
+    if (result) return result;
+    return (a->source_index > b->source_index) - (a->source_index < b->source_index);
+}
+
+static void sort_tracks(spotify_track *tracks, int count)
+{
+    if (count > 1) qsort(tracks, (size_t)count, sizeof tracks[0], track_compare);
+}
+
 static void track_rows(const spotify_track *tracks, int count, ui_row *rows)
 {
     for (int i = 0; i < count; ++i) {
@@ -1542,10 +1582,34 @@ static void mark_playing(const char *id)
             found_rows[i].playing = id && !strcmp(found[i].id, id);
 }
 
+/* Rebuild row metadata after sorting so row index, thumbnails and playback
+ * all refer to the same track. The existing playing queue stays unchanged. */
+static void refresh_sorted_tracks(void)
+{
+    if (liked_done) {
+        sort_tracks(liked, liked_ready);
+        track_rows(liked, liked_ready, liked_rows);
+        liked_shown = liked_ready;
+        xmb.lists[UI_CAT_LIKED][0].rows = liked_rows;
+        xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
+        liked_sort_applied = 1;
+    }
+    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq) {
+        sort_tracks(opened, open_done_count);
+        track_rows(opened, open_done_count, opened_rows);
+        open_list->rows = opened_rows;
+    }
+    if (current_index >= 0 && current_index < queue_len)
+        mark_playing(queue[current_index].id);
+}
+
 /* Picks up finished list loads and covers, and mirrors the player state. */
 static void sync_state(void)
 {
-    if (liked_ready > liked_shown) {
+    if (liked_done && !liked_sort_applied) {
+        refresh_sorted_tracks();
+    } else if (liked_ready > liked_shown) {
         const int ready = liked_ready;
         track_rows(&liked[liked_shown], ready - liked_shown, &liked_rows[liked_shown]);
         xmb.lists[UI_CAT_LIKED][0].rows = liked_rows;
@@ -1557,6 +1621,7 @@ static void sync_state(void)
     xmb.lists[UI_CAT_LIKED][0].loading = !liked_done;
     ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
+        sort_tracks(opened, open_done_count);
         track_rows(opened, open_done_count, opened_rows);
         open_list->rows = opened_rows;
         open_list->count = open_done_count;
@@ -1711,12 +1776,15 @@ static void sync_state(void)
                     memmove(&liked[1], &liked[0], sizeof liked[0] * tail);
                     memmove(&liked_rows[1], &liked_rows[0], sizeof liked_rows[0] * tail);
                     liked[0] = like_track;
+                    liked[0].added_at = UINT64_MAX;  /* just saved: newest in this session */
+                    liked[0].source_index = -1;
                     track_rows(&liked[0], 1, &liked_rows[0]);
                     liked_count = liked_count + 1;
                     liked_ready = liked_ready + 1;
                     ++liked_shown;
                 }
                 xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
+                refresh_sorted_tracks();
             }
         } else {
             ui_toast(&xmb, "Couldn't update Liked Songs");
@@ -2187,6 +2255,13 @@ static void pref_changed(pref_id id)
         break;
     case PREF_PLAYLIST_SORT:
         arrange_playlists();
+        break;
+    case PREF_TRACK_SORT:
+        refresh_sorted_tracks();
+        /* A subsequent play request must rebuild its queue in the new order. */
+        queue_key = -2;
+        xmb.sel[UI_CAT_LIKED][0] = 0;
+        xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
         break;
     case PREF_EQUALIZER:
     case PREF_NORMALIZE:
