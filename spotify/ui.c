@@ -59,7 +59,8 @@ static ui_state xmb;
 /* playlists[0] is unused (Liked Songs has its own category). */
 static spotify_playlist playlists[MAX_PLAYLISTS + 1];
 static int playlist_count;
-static ui_row playlist_rows[MAX_PLAYLISTS];
+static ui_row playlist_rows[MAX_PLAYLISTS], my_playlist_rows[MAX_PLAYLISTS];
+static int my_playlist_view[MAX_PLAYLISTS], my_playlist_count;
 
 /* Lists load on the loader thread so the interface keeps moving. The UI
  * thread only reads a buffer after the loader marked it done. */
@@ -82,6 +83,7 @@ static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
 static volatile int open_total_count, open_load_target;
 static int open_fetched_count;
+static int open_source_cat = UI_CAT_PLAYLISTS;
 
 /* Recently played tracks, most recently heard first. There is no second
  * level or playlist/album context inside Recent. */
@@ -227,15 +229,17 @@ static int prebake_pending = 1;
 
 /* Categories: all of them in the user's order, and which are hidden. */
 static const char *const cat_tokens[UI_CATS] = {
-    "search", "recent", "liked", "playlists", "now", "queue", "settings"
+    "search", "recent", "liked", "playlists", "now", "queue", "settings", "my_playlists"
 };
 static const char *const cat_titles[UI_CATS] = {
-    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings"
+    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings",
+    "My Playlists"
 };
 static const unsigned cat_icon[UI_CATS] = {
-    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS
+    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
+    ICON_LIST_MUSIC
 };
-static int cat_all[UI_CATS] = { 0, 1, 2, 3, 4, 5, 6 };
+static int cat_all[UI_CATS] = { 0, 1, 2, 3, UI_CAT_MY_PLAYLISTS, 4, 5, 6 };
 static unsigned char cat_hidden[UI_CATS];
 /* PREF_START values, in order. */
 static const int start_categories[] = {
@@ -247,6 +251,8 @@ static const int start_categories[] = {
 static char pinned[MAX_PINS][24];
 static int pinned_count;
 static int playlist_view[MAX_PLAYLISTS];    /* row -> playlists[] index */
+static int playlist_cat(int cat) { return cat == UI_CAT_PLAYLISTS || cat == UI_CAT_MY_PLAYLISTS; }
+static ui_list *opened_list(void) { return &xmb.lists[open_source_cat][1]; }
 static void arrange_playlists(void);
 static void site_finished(void);
 static int site_request(int job, int arg);
@@ -1356,8 +1362,10 @@ static volatile int thumb_px_slot = -1;     /* slot whose pixels wait for upload
 
 static void forget_texture(const r_tex *tex)
 {
-    for (int i = 0; i < MAX_PLAYLISTS; ++i)
+    for (int i = 0; i < MAX_PLAYLISTS; ++i) {
         if (playlist_rows[i].cover == tex) playlist_rows[i].cover = NULL;
+        if (my_playlist_rows[i].cover == tex) my_playlist_rows[i].cover = NULL;
+    }
     for (int i = 0; i < MAX_TRACKS; ++i) {
         if (liked_rows[i].cover == tex) liked_rows[i].cover = NULL;
         if (opened_rows[i].cover == tex) opened_rows[i].cover = NULL;
@@ -1473,7 +1481,7 @@ static void assign_thumbs(void)
 {
     ++frame_no;
     const int cat = xmb.cat;
-    if (cat != UI_CAT_LIKED && cat != UI_CAT_PLAYLISTS && cat != UI_CAT_SEARCH &&
+    if (cat != UI_CAT_LIKED && !playlist_cat(cat) && cat != UI_CAT_SEARCH &&
         cat != UI_CAT_RECENT && cat != UI_CAT_QUEUE)
         return;
     if (prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;     /* no covers to show */
@@ -1488,8 +1496,9 @@ static void assign_thumbs(void)
             if (i < 0 || i >= list->count) continue;
             char url[160];
             url[0] = '\0';
-            if (cat == UI_CAT_PLAYLISTS && lvl == 0) {
-                copy_text(url, sizeof url, playlists[playlist_view[i]].image);
+            if (playlist_cat(cat) && lvl == 0) {
+                int p = cat == UI_CAT_MY_PLAYLISTS ? my_playlist_view[i] : playlist_view[i];
+                copy_text(url, sizeof url, playlists[p].image);
             } else if (cat == UI_CAT_RECENT && lvl == 0) {
                 if (recent_tracks[i].has_thumb)
                     image_url(recent_tracks[i].thumb, url, sizeof url);
@@ -1561,7 +1570,7 @@ static void track_rows(const spotify_track *tracks, int count, ui_row *rows)
 static void mark_playing(const char *id)
 {
     for (int i = 0; i < liked_shown; ++i) liked_rows[i].playing = id && !strcmp(liked[i].id, id);
-    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    ui_list *open_list = opened_list();
     if (open_shown_seq == open_done_seq && open_list->count > 0)
         for (int i = 0; i < open_list->count; ++i)
             opened_rows[i].playing = id && !strcmp(opened[i].id, id);
@@ -1586,7 +1595,7 @@ static void refresh_sorted_tracks(void)
         xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
         liked_sort_applied = liked_done;
     }
-    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    ui_list *open_list = opened_list();
     if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq) {
         sort_tracks(opened, open_done_count);
         track_rows(opened, open_done_count, opened_rows);
@@ -1607,7 +1616,8 @@ static void maybe_expand_visible_tracks(void)
     if (cat == UI_CAT_LIKED) {
         limit = &liked_visible_limit;
         total = liked_count;
-    } else if (cat == UI_CAT_PLAYLISTS && xmb.level[cat] == 1 &&
+    } else if (playlist_cat(cat) && cat == open_source_cat &&
+               xmb.level[cat] == 1 &&
                open_req_seq == open_done_seq && open_shown_seq == open_done_seq) {
         limit = &opened_visible_limit;
         total = open_total_count;
@@ -1620,7 +1630,7 @@ static void maybe_expand_visible_tracks(void)
         *limit += songs_page_size();
         if (*limit > total) *limit = total;
         if (cat == UI_CAT_LIKED) liked_load_target = *limit;
-        if (cat == UI_CAT_PLAYLISTS) open_load_target = *limit;
+        if (playlist_cat(cat)) open_load_target = *limit;
     }
 }
 
@@ -1650,7 +1660,7 @@ static void sync_state(void)
     }
     xmb.lists[UI_CAT_LIKED][0].loading = liked_reload_requested || (!liked_done &&
         (liked_reorder_pending || liked_needs_all_names || liked_ready < liked_visible_limit));
-    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    ui_list *open_list = opened_list();
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
         sort_tracks(opened, open_done_count);
         track_rows(opened, open_done_count, opened_rows);
@@ -2022,8 +2032,8 @@ static const spotify_track *row_track(int cat, int level, int i)
 {
     if (i < 0) return NULL;
     if (cat == UI_CAT_LIKED && i < liked_shown) return &liked[i];
-    if (cat == UI_CAT_PLAYLISTS && level == 1 && open_shown_seq == open_done_seq &&
-        i < open_done_count)
+    if (playlist_cat(cat) && cat == open_source_cat && level == 1 &&
+        open_shown_seq == open_done_seq && i < open_done_count)
         return &opened[i];
     if (cat == UI_CAT_SEARCH && search_shown_seq == search_done_seq && i < search_done_count)
         return &found[i];
@@ -2043,9 +2053,11 @@ static int is_liked(const char *id)
 
 static void options_menu(const ui_event *e)
 {
-    if (e->category == UI_CAT_PLAYLISTS && e->level == 0) {
-        if (e->index < 0 || e->index >= playlist_count) return;
-        menu_playlist = playlist_view[e->index];
+    if (playlist_cat(e->category) && e->level == 0) {
+        int count = e->category == UI_CAT_MY_PLAYLISTS ? my_playlist_count : playlist_count;
+        if (e->index < 0 || e->index >= count) return;
+        menu_playlist = e->category == UI_CAT_MY_PLAYLISTS
+                        ? my_playlist_view[e->index] : playlist_view[e->index];
         const int on = pin_index(playlists[menu_playlist].id) >= 0;
         const char *item = on ? "Unpin" : "Pin to the top";
         menu_actions[0] = on ? MENU_UNPIN : MENU_PIN;
@@ -2142,6 +2154,8 @@ static void menu_choice(const ui_event *e)
         /* Keep the selection on the playlist that moved. */
         for (int i = 0; i < playlist_count; ++i)
             if (playlist_view[i] == menu_playlist) xmb.sel[UI_CAT_PLAYLISTS][0] = i;
+        for (int i = 0; i < my_playlist_count; ++i)
+            if (my_playlist_view[i] == menu_playlist) xmb.sel[UI_CAT_MY_PLAYLISTS][0] = i;
         save_settings();
         break;
     }
@@ -2278,6 +2292,7 @@ static void pref_changed(pref_id id)
         open_load_target = opened_visible_limit;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
+        xmb.sel[UI_CAT_MY_PLAYLISTS][1] = 0;
         refresh_sorted_tracks();
         if (!liked_done) {
             liked_shown = visible_tracks(liked_ready, liked_visible_limit);
@@ -2295,8 +2310,8 @@ static void pref_changed(pref_id id)
          * even when the playlist screen is not currently visible. */
         if (open_req_seq != 0 && open_req_playlist > 0) {
             opened_visible_limit = open_load_target = songs_page_size();
-            xmb.lists[UI_CAT_PLAYLISTS][1].count = 0;
-            xmb.lists[UI_CAT_PLAYLISTS][1].loading = 1;
+            opened_list()->count = 0;
+            opened_list()->loading = 1;
             ++open_req_seq;
         }
         refresh_sorted_tracks();
@@ -2304,6 +2319,7 @@ static void pref_changed(pref_id id)
         queue_key = -2;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
+        xmb.sel[UI_CAT_MY_PLAYLISTS][1] = 0;
         break;
     case PREF_EQUALIZER:
     case PREF_NORMALIZE:
@@ -2375,20 +2391,26 @@ static int handle(const ui_event *e)
             static char uri[sizeof ctx.cfg.username + 32];
             snprintf(uri, sizeof uri, "spotify:user:%s:collection", ctx.cfg.username);
             play_from(liked, liked_shown, e->index, -1, "Liked Songs", uri);
-        } else if (e->category == UI_CAT_PLAYLISTS && e->level == 0) {
-            if (e->index < 0 || e->index >= playlist_count) break;
-            int p = playlist_view[e->index];
-            ui_list *l = &xmb.lists[UI_CAT_PLAYLISTS][1];
+        } else if (playlist_cat(e->category) && e->level == 0) {
+            int count = e->category == UI_CAT_MY_PLAYLISTS ? my_playlist_count : playlist_count;
+            if (e->index < 0 || e->index >= count) break;
+            int p = e->category == UI_CAT_MY_PLAYLISTS
+                    ? my_playlist_view[e->index] : playlist_view[e->index];
+            /* One shared opened-track buffer; invalidate the other category. */
+            xmb.lists[UI_CAT_PLAYLISTS][1].count = 0;
+            xmb.lists[UI_CAT_MY_PLAYLISTS][1].count = 0;
+            ui_list *l = &xmb.lists[e->category][1];
             copy_text(l->header, sizeof l->header, playlists[p].name);
             l->rows = opened_rows;
             l->count = 0;
             l->loading = 1;
-            ui_open_level(&xmb, UI_CAT_PLAYLISTS);
+            ui_open_level(&xmb, e->category);
+            open_source_cat = e->category;
             open_req_playlist = p;
             opened_visible_limit = songs_page_size();
             open_load_target = opened_visible_limit;
             ++open_req_seq;
-        } else if (e->category == UI_CAT_PLAYLISTS) {
+        } else if (playlist_cat(e->category) && e->category == open_source_cat) {
             /* Only once the list on screen is the one in the buffer. */
             if (open_req_seq == open_done_seq && open_shown_seq == open_done_seq)
             {
@@ -2603,6 +2625,21 @@ static void arrange_playlists(void)
     }
     xmb.lists[UI_CAT_PLAYLISTS][0].rows = playlist_rows;
     xmb.lists[UI_CAT_PLAYLISTS][0].count = playlist_count;
+
+    /* Filter after sorting so both sections use identical ordering/pins. */
+    my_playlist_count = 0;
+    for (int i = 0; i < playlist_count; ++i) {
+        const int index = playlist_view[i];
+        const spotify_playlist *p = &playlists[index];
+        if (!p->owner[0] || strcmp(p->owner, ctx.cfg.username)) continue;
+        my_playlist_view[my_playlist_count] = index;
+        ui_row *r = &my_playlist_rows[my_playlist_count];
+        *r = playlist_rows[i];
+        r->cover = NULL;
+        ++my_playlist_count;
+    }
+    xmb.lists[UI_CAT_MY_PLAYLISTS][0].rows = my_playlist_rows;
+    xmb.lists[UI_CAT_MY_PLAYLISTS][0].count = my_playlist_count;
 }
 
 static void load_playlists(void)
