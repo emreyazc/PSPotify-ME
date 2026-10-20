@@ -76,7 +76,8 @@ static volatile int open_req_playlist, open_done_playlist, open_done_count;
 /* Recently played contexts, loaded the first time Recent is shown, and the
  * songs of the one opened. */
 #define MAX_RECENT 30
-#define MAX_CONTEXT_TRACKS 200
+/* Keep Recent song lists aligned with Liked Songs and Playlists. */
+#define MAX_CONTEXT_TRACKS MAX_TRACKS
 static spotify_context recent[MAX_RECENT];
 static ui_row recent_rows[MAX_RECENT];
 static volatile int recent_requested, recent_done, recent_count, recent_shown;
