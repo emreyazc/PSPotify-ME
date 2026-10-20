@@ -78,6 +78,7 @@ static int opened_visible_limit;
 static int ctx_visible_limit;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
 static int liked_reorder_pending;
+static volatile int liked_reload_requested;
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
 static volatile int open_total_count, open_load_target;
@@ -1049,6 +1050,13 @@ static int loader_thread(SceSize args, void *argp)
             open_done_count = next;
             continue;
         }
+        if (liked_reload_requested) {
+            liked_ids_loaded = liked_done = liked_count = liked_ready = 0;
+            liked_sort_applied = liked_reorder_pending = 0;
+            liked_load_target = liked_visible_limit;
+            liked_reload_requested = 0;
+            continue;
+        }
         if (!liked_ids_loaded) {
             memset(liked, 0, sizeof liked);
             int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username, "",
@@ -1712,7 +1720,10 @@ static void sync_state(void)
 {
     const int liked_needs_all_names = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
                                       prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST;
-    if (liked_done && !liked_sort_applied) {
+    if (liked_reload_requested) {
+        liked_shown = 0;
+        xmb.lists[UI_CAT_LIKED][0].count = 0;
+    } else if (liked_done && !liked_sort_applied) {
         refresh_sorted_tracks();
         liked_reorder_pending = 0;
     } else if (!liked_done && (liked_reorder_pending || liked_needs_all_names)) {
@@ -1728,8 +1739,8 @@ static void sync_state(void)
         const int playing = current_index;
         if (playing >= 0 && playing < queue_len) mark_playing(queue[playing].id);
     }
-    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done &&
-        (liked_reorder_pending || liked_needs_all_names || liked_ready < liked_visible_limit);
+    xmb.lists[UI_CAT_LIKED][0].loading = liked_reload_requested || (!liked_done &&
+        (liked_reorder_pending || liked_needs_all_names || liked_ready < liked_visible_limit));
     ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
         sort_tracks(opened, open_done_count);
@@ -1891,33 +1902,12 @@ static void sync_state(void)
         like_seen_seq = like_done_seq;
         if (like_status == 200) {
             ui_toast(&xmb, like_remove ? "Removed from Liked Songs" : "Saved to Liked Songs");
-            /* Keep the list on screen in step once it is fully loaded. */
-            if (liked_done) {
-                int at = -1;
-                for (int i = 0; i < liked_shown && at < 0; ++i)
-                    if (!strcmp(liked[i].id, like_track.id)) at = i;
-                if (like_remove && at >= 0) {
-                    const size_t tail = (size_t)(liked_shown - at - 1);
-                    memmove(&liked[at], &liked[at + 1], sizeof liked[0] * tail);
-                    memmove(&liked_rows[at], &liked_rows[at + 1], sizeof liked_rows[0] * tail);
-                    liked_count = liked_count - 1;
-                    liked_ready = liked_ready - 1;
-                    --liked_shown;
-                } else if (!like_remove && at < 0 && liked_shown < MAX_TRACKS) {
-                    const size_t tail = (size_t)liked_shown;
-                    memmove(&liked[1], &liked[0], sizeof liked[0] * tail);
-                    memmove(&liked_rows[1], &liked_rows[0], sizeof liked_rows[0] * tail);
-                    liked[0] = like_track;
-                    liked[0].added_at = UINT64_MAX;  /* just saved: newest in this session */
-                    liked[0].source_index = -1;
-                    track_rows(&liked[0], 1, &liked_rows[0]);
-                    liked_count = liked_count + 1;
-                    liked_ready = liked_ready + 1;
-                    ++liked_shown;
-                }
-                xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
-                refresh_sorted_tracks();
-            }
+            /* Refresh IDs on the loader thread. A partial list cannot be
+             * safely spliced: its unseen tail must remain in source order. */
+            liked_reload_requested = 1;
+            liked_shown = 0;
+            xmb.lists[UI_CAT_LIKED][0].count = 0;
+            xmb.sel[UI_CAT_LIKED][0] = 0;
         } else {
             ui_toast(&xmb, "Couldn't update Liked Songs");
         }
@@ -2152,7 +2142,7 @@ static const spotify_track *row_track(int cat, int level, int i)
 
 static int is_liked(const char *id)
 {
-    for (int i = 0; i < liked_shown; ++i)
+    for (int i = 0; i < liked_count; ++i)
         if (!strcmp(liked[i].id, id)) return 1;
     return 0;
 }
