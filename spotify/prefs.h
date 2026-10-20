@@ -37,6 +37,7 @@ typedef enum {
     PREF_START,
     PREF_NOW_LAYOUT,
     PREF_PLAYLIST_SORT,
+    PREF_TRACK_SORT,
     /* Sound */
     PREF_EQUALIZER,
     PREF_EQ_60,             /* the five custom equalizer bands, in order */
@@ -68,6 +69,7 @@ typedef enum {
 enum { BACKGROUND_PLAIN, BACKGROUND_BLURRED_COVER, BACKGROUND_WALLPAPER };
 enum { CLOCK_24H, CLOCK_12H, CLOCK_HIDDEN };
 enum { SORT_SPOTIFY, SORT_NAME, SORT_SIZE };
+enum { TRACK_SORT_NEWEST, TRACK_SORT_OLDEST, TRACK_SORT_SPOTIFY, TRACK_SORT_TITLE, TRACK_SORT_ARTIST };
 enum { SLEEP_PAUSE, SLEEP_POWER_OFF };
 #define EQ_BAND_MIN (-12)
 #define EQ_BAND_STEP 2
