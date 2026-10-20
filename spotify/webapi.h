@@ -76,6 +76,8 @@ typedef struct {
     char name[96];
     char artist[64];
     unsigned int duration_ms;
+    uint64_t added_at;     /* collection added_at / playlist item timestamp; 0 if unknown */
+    int source_index;      /* original order returned by Spotify */
     uint8_t cover[20];    /* album cover image file id (i.scdn.co/image/<hex>) */
     uint8_t has_cover;
     uint8_t thumb[20];    /* the same cover at 64x64, for list rows */
