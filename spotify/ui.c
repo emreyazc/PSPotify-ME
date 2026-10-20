@@ -73,6 +73,7 @@ static volatile int liked_done, liked_count, liked_ready, liked_ids_loaded;
 static void sort_tracks(spotify_track *tracks, int count);
 static int liked_shown;
 static int liked_visible_limit;
+static volatile int liked_load_target;
 static int opened_visible_limit;
 static int ctx_visible_limit;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
@@ -837,6 +838,7 @@ static void load_settings(void)
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
     liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
+    liked_load_target = liked_visible_limit;
     log_printf("UI: settings read\n");
     apply_equalizer();
     apply_style();
@@ -1035,15 +1037,23 @@ static int loader_thread(SceSize args, void *argp)
         }
         if (!liked_done) {
             const int i = liked_ready;
-            const int batch = liked_count - i < SPOTIFY_DETAILS_BATCH ? liked_count - i
-                                                                       : SPOTIFY_DETAILS_BATCH;
-            spotify_sp_track_details(ctx.client_token, ctx.access_token, &liked[i], batch);
-            liked_ready = i + batch;
-            if (liked_ready >= liked_count) {
-                liked_done = 1;
-                log_printf("UI: %d liked songs\n", liked_count);
+            /* Name/artist sorting needs all titles before it can be correct.
+             * Date and Spotify order need only the requested metadata page. */
+            int target = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                         prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST
+                         ? liked_count : liked_load_target;
+            if (target > liked_count) target = liked_count;
+            if (i < target) {
+                int batch = target - i;
+                if (batch > SPOTIFY_DETAILS_BATCH) batch = SPOTIFY_DETAILS_BATCH;
+                spotify_sp_track_details(ctx.client_token, ctx.access_token, &liked[i], batch);
+                liked_ready = i + batch;
+                if (liked_ready >= liked_count) {
+                    liked_done = 1;
+                    log_printf("UI: %d liked songs\n", liked_count);
+                }
+                continue;
             }
-            continue;
         }
         sceKernelDelayThread(30000);
     }
@@ -1664,6 +1674,7 @@ static void maybe_expand_visible_tracks(void)
         xmb.sel[cat][level] >= shown - 10) {
         *limit += songs_page_size();
         if (*limit > total) *limit = total;
+        if (cat == UI_CAT_LIKED) liked_load_target = *limit;
     }
 }
 
@@ -2330,12 +2341,16 @@ static void pref_changed(pref_id id)
         break;
     case PREF_SONGS_PER_LOAD:
         liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
+        liked_load_target = liked_visible_limit;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
         xmb.sel[UI_CAT_RECENT][1] = 0;
         refresh_sorted_tracks();
         break;
     case PREF_TRACK_SORT:
+        /* Complete any partially fetched Liked Songs list before reordering
+         * so switching sort modes cannot leave an unsorted unloaded tail. */
+        if (!liked_done) liked_load_target = liked_count;
         refresh_sorted_tracks();
         /* A subsequent play request must rebuild its queue in the new order. */
         queue_key = -2;
