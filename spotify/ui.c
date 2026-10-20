@@ -75,7 +75,6 @@ static int liked_shown;
 static int liked_visible_limit;
 static volatile int liked_load_target;
 static int opened_visible_limit;
-static int ctx_visible_limit;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
 static int liked_reorder_pending;
 static volatile int liked_reload_requested;
@@ -84,20 +83,13 @@ static volatile int open_req_playlist, open_done_playlist, open_done_count;
 static volatile int open_total_count, open_load_target;
 static int open_fetched_count;
 
-/* Recently played contexts, loaded the first time Recent is shown, and the
- * songs of the one opened. */
-#define MAX_RECENT 30
-/* Keep Recent song lists aligned with Liked Songs and Playlists. */
-#define MAX_CONTEXT_TRACKS MAX_TRACKS
-static spotify_context recent[MAX_RECENT];
+/* Recently played tracks, most recently heard first. There is no second
+ * level or playlist/album context inside Recent. */
+#define MAX_RECENT 50
+static spotify_track recent_tracks[MAX_RECENT];
 static ui_row recent_rows[MAX_RECENT];
-static volatile int recent_requested, recent_done, recent_count, recent_shown;
-static spotify_track ctx_tracks[MAX_CONTEXT_TRACKS];
-static ui_row ctx_rows[MAX_CONTEXT_TRACKS];
-static volatile unsigned ctx_req_seq, ctx_done_seq, ctx_shown_seq;
-static volatile int ctx_req_index, ctx_done_count;
-static volatile int ctx_total_count, ctx_load_target;
-static int ctx_fetched_count;
+static volatile unsigned recent_req_seq, recent_done_seq, recent_shown_seq;
+static volatile int recent_count, recent_error;
 
 /* Search results, loaded the same way. */
 #define MAX_RESULTS 50
@@ -843,10 +835,9 @@ static void load_settings(void)
         fclose(f);
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
-    liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
+    liked_visible_limit = opened_visible_limit = songs_page_size();
     liked_load_target = liked_visible_limit;
     open_load_target = opened_visible_limit;
-    ctx_load_target = ctx_visible_limit;
     log_printf("UI: settings read\n");
     apply_equalizer();
     apply_style();
@@ -897,46 +888,15 @@ static int is_collection(const char *uri)
     return n > 11 && strcmp(uri + n - 11, ":collection") == 0;
 }
 
-static const spotify_playlist *known_playlist(const char *uri)
-{
-    if (strncmp(uri, "spotify:playlist:", 17) != 0) return NULL;
-    for (int i = 1; i <= playlist_count; ++i)
-        if (!strcmp(playlists[i].id, uri + 17)) return &playlists[i];
-    return NULL;
-}
-
 static void load_recent(void)
 {
-    int n = spotify_sp_recent(ctx.client_token, ctx.access_token, ctx.cfg.username, recent,
-                              MAX_RECENT);
+    memset(recent_tracks, 0, sizeof recent_tracks);
+    int n = spotify_sp_recent_tracks(ctx.client_token, ctx.access_token,
+                                    ctx.cfg.username, recent_tracks, MAX_RECENT);
+    recent_error = n < 0;
     if (n < 0) n = 0;
-    for (int i = 0; i < n && !player_quit; ++i) {
-        const spotify_playlist *p = known_playlist(recent[i].uri);
-        if (is_collection(recent[i].uri))
-            copy_text(recent[i].name, sizeof recent[i].name, "Liked Songs");
-        else if (p)
-            copy_text(recent[i].name, sizeof recent[i].name, p->name);
-        else
-            spotify_sp_context(ctx.client_token, ctx.access_token, recent[i].uri,
-                               recent[i].name, sizeof recent[i].name, NULL, 0);
-    }
+    fill_details(recent_tracks, n);
     recent_count = n;
-}
-
-static int load_context(int i)
-{
-    const char *uri = recent[i].uri;
-    memset(ctx_tracks, 0, sizeof ctx_tracks);
-    if (is_collection(uri))
-        return load_list_max("", ctx_tracks, MAX_CONTEXT_TRACKS, &ctx_fetched_count);
-    if (!strncmp(uri, "spotify:playlist:", 17))
-        return load_list_max(uri + 17, ctx_tracks, MAX_CONTEXT_TRACKS, &ctx_fetched_count);
-    int n = spotify_sp_context(ctx.client_token, ctx.access_token, uri, NULL, 0, ctx_tracks,
-                               MAX_CONTEXT_TRACKS);
-    if (n < 0) n = 0;
-    ctx_fetched_count = visible_tracks(n, songs_page_size());
-    fill_details(ctx_tracks, ctx_fetched_count);
-    return n;
 }
 
 static int load_list(const char *playlist_id, spotify_track *out)
@@ -978,31 +938,11 @@ static int loader_thread(SceSize args, void *argp)
     (void)args;
     (void)argp;
     while (!player_quit) {
-        if (recent_requested && !recent_done) {
+        unsigned recent_seq = recent_req_seq;
+        if (recent_seq != recent_done_seq) {
             load_recent();
-            recent_done = 1;
-            continue;
-        }
-        unsigned ctx_seq = ctx_req_seq;
-        if (ctx_seq != ctx_done_seq) {
-            int i = ctx_req_index;
-            ctx_total_count = load_context(i);
-            /* Do not publish rows whose details have not been fetched yet.
-             * Settings can change the requested page size during the HTTP call. */
-            ctx_done_count = visible_tracks(ctx_fetched_count, ctx_load_target);
-            ctx_done_seq = ctx_seq;
-            log_printf("UI: %d songs in recent context %d (first %d)\n",
-                       ctx_total_count, i, ctx_done_count);
-            continue;
-        }
-        if (ctx_done_seq == ctx_req_seq && ctx_done_count < ctx_total_count &&
-            ctx_done_count < ctx_load_target) {
-            int next = visible_tracks(ctx_total_count, ctx_load_target);
-            if (ctx_fetched_count < next) {
-                fill_details(&ctx_tracks[ctx_fetched_count], next - ctx_fetched_count);
-                ctx_fetched_count = next;
-            }
-            ctx_done_count = next;
+            recent_done_seq = recent_seq;
+            log_printf("UI: %d recently played songs\n", recent_count);
             continue;
         }
         unsigned site_seq = site_req_seq;
@@ -1432,8 +1372,6 @@ static void forget_texture(const r_tex *tex)
         if (found_rows[i].cover == tex) found_rows[i].cover = NULL;
     for (int i = 0; i < MAX_RECENT; ++i)
         if (recent_rows[i].cover == tex) recent_rows[i].cover = NULL;
-    for (int i = 0; i < MAX_CONTEXT_TRACKS; ++i)
-        if (ctx_rows[i].cover == tex) ctx_rows[i].cover = NULL;
     for (int i = 0; i < QUEUE_VIEW; ++i)
         if (queue_rows[i].cover == tex) queue_rows[i].cover = NULL;
 }
@@ -1559,10 +1497,8 @@ static void assign_thumbs(void)
             if (cat == UI_CAT_PLAYLISTS && lvl == 0) {
                 copy_text(url, sizeof url, playlists[playlist_view[i]].image);
             } else if (cat == UI_CAT_RECENT && lvl == 0) {
-                const spotify_playlist *p = known_playlist(recent[i].uri);
-                if (p) copy_text(url, sizeof url, p->image);
-            } else if (cat == UI_CAT_RECENT) {
-                if (ctx_tracks[i].has_thumb) image_url(ctx_tracks[i].thumb, url, sizeof url);
+                if (recent_tracks[i].has_thumb)
+                    image_url(recent_tracks[i].thumb, url, sizeof url);
             } else if (cat == UI_CAT_QUEUE) {
                 const spotify_track *t = &queue[queue_view[i]];
                 if (t->has_thumb) image_url(t->thumb, url, sizeof url);
@@ -1635,10 +1571,9 @@ static void mark_playing(const char *id)
     if (open_shown_seq == open_done_seq && open_list->count > 0)
         for (int i = 0; i < open_list->count; ++i)
             opened_rows[i].playing = id && !strcmp(opened[i].id, id);
-    ui_list *ctx_list = &xmb.lists[UI_CAT_RECENT][1];
-    if (ctx_shown_seq == ctx_done_seq)
-        for (int i = 0; i < ctx_list->count; ++i)
-            ctx_rows[i].playing = id && !strcmp(ctx_tracks[i].id, id);
+    if (recent_shown_seq == recent_done_seq)
+        for (int i = 0; i < recent_count; ++i)
+            recent_rows[i].playing = id && !strcmp(recent_tracks[i].id, id);
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
     if (search_shown_seq == search_done_seq)
         for (int i = 0; i < results->count; ++i)
@@ -1647,16 +1582,6 @@ static void mark_playing(const char *id)
 
 /* Rebuild row metadata after sorting so row index, thumbnails and playback
  * all refer to the same track. The existing playing queue stays unchanged. */
-/* Recent can open playlists, Liked Songs, albums or artists. Only
- * collections/playlists use the user-selected song ordering: album track
- * numbers and artist context order must remain as Spotify provides them. */
-static int recent_tracks_sortable(void)
-{
-    if (ctx_req_index < 0 || ctx_req_index >= recent_count) return 0;
-    const char *uri = recent[ctx_req_index].uri;
-    return is_collection(uri) || !strncmp(uri, "spotify:playlist:", 17);
-}
-
 static void refresh_sorted_tracks(void)
 {
     if (liked_done) {
@@ -1673,13 +1598,6 @@ static void refresh_sorted_tracks(void)
         track_rows(opened, open_done_count, opened_rows);
         open_list->rows = opened_rows;
         open_list->count = visible_tracks(open_done_count, opened_visible_limit);
-    }
-    if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq &&
-        recent_tracks_sortable()) {
-        sort_tracks(ctx_tracks, ctx_done_count);
-        track_rows(ctx_tracks, ctx_done_count, ctx_rows);
-        xmb.lists[UI_CAT_RECENT][1].rows = ctx_rows;
-        xmb.lists[UI_CAT_RECENT][1].count = visible_tracks(ctx_done_count, ctx_visible_limit);
     }
     if (current_index >= 0 && current_index < queue_len)
         mark_playing(queue[current_index].id);
@@ -1700,11 +1618,6 @@ static void maybe_expand_visible_tracks(void)
         limit = &opened_visible_limit;
         total = open_total_count;
         level = 1;
-    } else if (cat == UI_CAT_RECENT && xmb.level[cat] == 1 &&
-               ctx_req_seq == ctx_done_seq && ctx_shown_seq == ctx_done_seq) {
-        limit = &ctx_visible_limit;
-        total = ctx_total_count;
-        level = 1;
     }
     if (!limit) return;
     const int shown = xmb.lists[cat][level].count;
@@ -1714,7 +1627,6 @@ static void maybe_expand_visible_tracks(void)
         if (*limit > total) *limit = total;
         if (cat == UI_CAT_LIKED) liked_load_target = *limit;
         if (cat == UI_CAT_PLAYLISTS) open_load_target = *limit;
-        if (cat == UI_CAT_RECENT) ctx_load_target = *limit;
     }
 }
 
@@ -1754,35 +1666,29 @@ static void sync_state(void)
         open_shown_seq = open_done_seq;
     }
 
-    if (xmb.cat == UI_CAT_RECENT && !recent_requested) {
-        recent_requested = 1;
-        xmb.lists[UI_CAT_RECENT][0].loading = 1;
+    /* Refresh on each entry, so tracks played during the session can appear
+     * without restarting the app. Never shuffle the listening-history order. */
+    static int was_recent;
+    const int in_recent = xmb.cat == UI_CAT_RECENT;
+    if (in_recent && !was_recent) {
+        ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
+        l->rows = recent_rows;
+        l->count = 0;
+        l->loading = 1;
+        ++recent_req_seq;
     }
-    if (recent_done && !recent_shown) {
-        for (int i = 0; i < recent_count; ++i) {
-            ui_row *r = &recent_rows[i];
-            const char *uri = recent[i].uri;
-            memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, recent[i].name[0] ? recent[i].name : uri);
-            copy_text(r->subtitle, sizeof r->subtitle,
-                      is_collection(uri) ? "Your Liked Songs"
-                      : !strncmp(uri, "spotify:playlist:", 17) ? "Playlist"
-                      : !strncmp(uri, "spotify:album:", 14) ? "Album" : "Artist");
-            r->color = row_color(uri);
-            r->round = !strncmp(uri, "spotify:artist:", 15);
-        }
-        xmb.lists[UI_CAT_RECENT][0].rows = recent_rows;
-        xmb.lists[UI_CAT_RECENT][0].count = recent_count;
-        xmb.lists[UI_CAT_RECENT][0].loading = 0;
-        recent_shown = 1;
-    }
-    if (ctx_done_seq == ctx_req_seq && ctx_shown_seq != ctx_done_seq) {
-        if (recent_tracks_sortable()) sort_tracks(ctx_tracks, ctx_done_count);
-        track_rows(ctx_tracks, ctx_done_count, ctx_rows);
-        xmb.lists[UI_CAT_RECENT][1].rows = ctx_rows;
-        xmb.lists[UI_CAT_RECENT][1].count = visible_tracks(ctx_done_count, ctx_visible_limit);
-        xmb.lists[UI_CAT_RECENT][1].loading = 0;
-        ctx_shown_seq = ctx_done_seq;
+    was_recent = in_recent;
+    if (recent_req_seq && recent_done_seq == recent_req_seq &&
+        recent_shown_seq != recent_done_seq) {
+        track_rows(recent_tracks, recent_count, recent_rows);
+        ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
+        l->rows = recent_rows;
+        l->count = recent_count;
+        l->loading = 0;
+        recent_shown_seq = recent_done_seq;
+        if (recent_error) ui_toast(&xmb, "Couldn't load listening history");
+        if (current_index >= 0 && current_index < queue_len)
+            mark_playing(queue[current_index].id);
     }
     /* Metadata for the next page has arrived: publish only complete rows. */
     if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq &&
@@ -1791,16 +1697,6 @@ static void sync_state(void)
         track_rows(&opened[open_list->count], count - open_list->count,
                    &opened_rows[open_list->count]);
         open_list->count = count;
-        if (current_index >= 0 && current_index < queue_len)
-            mark_playing(queue[current_index].id);
-    }
-    ui_list *ctx_list = &xmb.lists[UI_CAT_RECENT][1];
-    if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq &&
-        ctx_list->count < visible_tracks(ctx_done_count, ctx_visible_limit)) {
-        int count = visible_tracks(ctx_done_count, ctx_visible_limit);
-        track_rows(&ctx_tracks[ctx_list->count], count - ctx_list->count,
-                   &ctx_rows[ctx_list->count]);
-        ctx_list->count = count;
         if (current_index >= 0 && current_index < queue_len)
             mark_playing(queue[current_index].id);
     }
@@ -2137,8 +2033,9 @@ static const spotify_track *row_track(int cat, int level, int i)
         return &opened[i];
     if (cat == UI_CAT_SEARCH && search_shown_seq == search_done_seq && i < search_done_count)
         return &found[i];
-    if (cat == UI_CAT_RECENT && level == 1 && ctx_shown_seq == ctx_done_seq && i < ctx_done_count)
-        return &ctx_tracks[i];
+    if (cat == UI_CAT_RECENT && level == 0 &&
+        recent_shown_seq == recent_done_seq && i < recent_count)
+        return &recent_tracks[i];
     if (cat == UI_CAT_QUEUE && i < xmb.lists[UI_CAT_QUEUE][0].count) return &queue[queue_view[i]];
     return NULL;
 }
@@ -2382,22 +2279,16 @@ static void pref_changed(pref_id id)
         arrange_playlists();
         break;
     case PREF_SONGS_PER_LOAD:
-        liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
+        liked_visible_limit = opened_visible_limit = songs_page_size();
         liked_load_target = liked_reorder_pending ? liked_count : liked_visible_limit;
         open_load_target = opened_visible_limit;
-        ctx_load_target = ctx_visible_limit;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
-        xmb.sel[UI_CAT_RECENT][1] = 0;
         refresh_sorted_tracks();
         if (!liked_done) {
             liked_shown = visible_tracks(liked_ready, liked_visible_limit);
             xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
         }
-        /* Album/artist contexts keep their original order but still page. */
-        if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq)
-            xmb.lists[UI_CAT_RECENT][1].count =
-                visible_tracks(ctx_done_count, ctx_visible_limit);
         break;
     case PREF_TRACK_SORT:
         /* Finish partially loaded Liked Songs before switching sort order. */
@@ -2414,19 +2305,11 @@ static void pref_changed(pref_id id)
             xmb.lists[UI_CAT_PLAYLISTS][1].loading = 1;
             ++open_req_seq;
         }
-        if (ctx_req_seq != 0 && ctx_req_index >= 0 &&
-            ctx_req_index < recent_count && recent_tracks_sortable()) {
-            ctx_visible_limit = ctx_load_target = songs_page_size();
-            xmb.lists[UI_CAT_RECENT][1].count = 0;
-            xmb.lists[UI_CAT_RECENT][1].loading = 1;
-            ++ctx_req_seq;
-        }
         refresh_sorted_tracks();
         /* A subsequent play request must rebuild its queue in the new order. */
         queue_key = -2;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
-        xmb.sel[UI_CAT_RECENT][1] = 0;
         break;
     case PREF_EQUALIZER:
     case PREF_NORMALIZE:
@@ -2521,20 +2404,11 @@ static int handle(const ui_event *e)
                           playlists[open_done_playlist].name, uri);
             }
         } else if (e->category == UI_CAT_RECENT && e->level == 0) {
-            ui_list *l = &xmb.lists[UI_CAT_RECENT][1];
-            copy_text(l->header, sizeof l->header, recent_rows[e->index].title);
-            l->rows = ctx_rows;
-            l->count = 0;
-            l->loading = 1;
-            ui_open_level(&xmb, UI_CAT_RECENT);
-            ctx_req_index = e->index;
-            ctx_visible_limit = songs_page_size();
-            ctx_load_target = ctx_visible_limit;
-            ++ctx_req_seq;
-        } else if (e->category == UI_CAT_RECENT) {
-            if (ctx_req_seq == ctx_done_seq && ctx_shown_seq == ctx_done_seq)
-                play_from(ctx_tracks, ctx_done_count, e->index, -2000 - (int)ctx_done_seq,
-                          recent_rows[ctx_req_index].title, recent[ctx_req_index].uri);
+            if (recent_req_seq == recent_done_seq &&
+                recent_shown_seq == recent_done_seq &&
+                e->index >= 0 && e->index < recent_count)
+                play_from(recent_tracks, recent_count, e->index,
+                          -2000 - (int)recent_done_seq, "Recent", "");
         } else if (e->category == UI_CAT_QUEUE) {
             if (e->index >= 0 && e->index < xmb.lists[UI_CAT_QUEUE][0].count)
                 start_track(queue_view[e->index]);
