@@ -2380,7 +2380,7 @@ static void pref_changed(pref_id id)
         break;
     case PREF_SONGS_PER_LOAD:
         liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
-        liked_load_target = liked_visible_limit;
+        liked_load_target = liked_reorder_pending ? liked_count : liked_visible_limit;
         open_load_target = opened_visible_limit;
         ctx_load_target = ctx_visible_limit;
         xmb.sel[UI_CAT_LIKED][0] = 0;
