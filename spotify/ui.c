@@ -1590,6 +1590,16 @@ static void mark_playing(const char *id)
 
 /* Rebuild row metadata after sorting so row index, thumbnails and playback
  * all refer to the same track. The existing playing queue stays unchanged. */
+/* Recent can open playlists, Liked Songs, albums or artists. Only
+ * collections/playlists use the user-selected song ordering: album track
+ * numbers and artist context order must remain as Spotify provides them. */
+static int recent_tracks_sortable(void)
+{
+    if (ctx_req_index < 0 || ctx_req_index >= recent_count) return 0;
+    const char *uri = recent[ctx_req_index].uri;
+    return is_collection(uri) || !strncmp(uri, "spotify:playlist:", 17);
+}
+
 static void refresh_sorted_tracks(void)
 {
     if (liked_done) {
@@ -1605,6 +1615,12 @@ static void refresh_sorted_tracks(void)
         sort_tracks(opened, open_done_count);
         track_rows(opened, open_done_count, opened_rows);
         open_list->rows = opened_rows;
+    }
+    if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq &&
+        recent_tracks_sortable()) {
+        sort_tracks(ctx_tracks, ctx_done_count);
+        track_rows(ctx_tracks, ctx_done_count, ctx_rows);
+        xmb.lists[UI_CAT_RECENT][1].rows = ctx_rows;
     }
     if (current_index >= 0 && current_index < queue_len)
         mark_playing(queue[current_index].id);
@@ -1658,6 +1674,7 @@ static void sync_state(void)
         recent_shown = 1;
     }
     if (ctx_done_seq == ctx_req_seq && ctx_shown_seq != ctx_done_seq) {
+        if (recent_tracks_sortable()) sort_tracks(ctx_tracks, ctx_done_count);
         track_rows(ctx_tracks, ctx_done_count, ctx_rows);
         xmb.lists[UI_CAT_RECENT][1].rows = ctx_rows;
         xmb.lists[UI_CAT_RECENT][1].count = ctx_done_count;
@@ -2268,6 +2285,7 @@ static void pref_changed(pref_id id)
         queue_key = -2;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
+        xmb.sel[UI_CAT_RECENT][1] = 0;
         break;
     case PREF_EQUALIZER:
     case PREF_NORMALIZE:
