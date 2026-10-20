@@ -79,6 +79,8 @@ static int ctx_visible_limit;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
+static volatile int open_total_count, open_load_target;
+static int open_fetched_count;
 
 /* Recently played contexts, loaded the first time Recent is shown, and the
  * songs of the one opened. */
@@ -92,6 +94,8 @@ static spotify_track ctx_tracks[MAX_CONTEXT_TRACKS];
 static ui_row ctx_rows[MAX_CONTEXT_TRACKS];
 static volatile unsigned ctx_req_seq, ctx_done_seq, ctx_shown_seq;
 static volatile int ctx_req_index, ctx_done_count;
+static volatile int ctx_total_count, ctx_load_target;
+static int ctx_fetched_count;
 
 /* Search results, loaded the same way. */
 #define MAX_RESULTS 50
@@ -839,6 +843,8 @@ static void load_settings(void)
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
     liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
     liked_load_target = liked_visible_limit;
+    open_load_target = opened_visible_limit;
+    ctx_load_target = ctx_visible_limit;
     log_printf("UI: settings read\n");
     apply_equalizer();
     apply_style();
@@ -865,13 +871,21 @@ static void fill_details(spotify_track *out, int n)
     }
 }
 
-static int load_list_max(const char *playlist_id, spotify_track *out, int max)
+/* Fetch IDs and timestamps first, then fetch only the first visible page's
+ * names/covers. Title/artist sorting needs all names to establish the order,
+ * so those modes eagerly fetch metadata but still reveal rows in pages. */
+static int load_list_max(const char *playlist_id, spotify_track *out, int max, int *fetched)
 {
     memset(out, 0, sizeof(spotify_track) * (size_t)max);
     int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username,
                               playlist_id, out, max);
     if (n < 0) n = 0;
-    fill_details(out, n);
+    const int names_required = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                               prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST;
+    if (!names_required) sort_tracks(out, n);
+    *fetched = names_required ? n : visible_tracks(n, songs_page_size());
+    fill_details(out, *fetched);
+    if (names_required) sort_tracks(out, n);
     return n;
 }
 
@@ -911,32 +925,21 @@ static int load_context(int i)
 {
     const char *uri = recent[i].uri;
     memset(ctx_tracks, 0, sizeof ctx_tracks);
-    if (is_collection(uri)) {
-        int n = liked_ready < MAX_CONTEXT_TRACKS ? liked_ready : MAX_CONTEXT_TRACKS;
-        memcpy(ctx_tracks, liked, sizeof ctx_tracks[0] * (size_t)n);
-        return n;
-    }
+    if (is_collection(uri))
+        return load_list_max("", ctx_tracks, MAX_CONTEXT_TRACKS, &ctx_fetched_count);
     if (!strncmp(uri, "spotify:playlist:", 17))
-        return load_list_max(uri + 17, ctx_tracks, MAX_CONTEXT_TRACKS);
+        return load_list_max(uri + 17, ctx_tracks, MAX_CONTEXT_TRACKS, &ctx_fetched_count);
     int n = spotify_sp_context(ctx.client_token, ctx.access_token, uri, NULL, 0, ctx_tracks,
                                MAX_CONTEXT_TRACKS);
     if (n < 0) n = 0;
-    fill_details(ctx_tracks, n);
+    ctx_fetched_count = visible_tracks(n, songs_page_size());
+    fill_details(ctx_tracks, ctx_fetched_count);
     return n;
 }
 
 static int load_list(const char *playlist_id, spotify_track *out)
 {
-    memset(out, 0, sizeof(spotify_track) * MAX_TRACKS);
-    int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username,
-                              playlist_id, out, MAX_TRACKS);
-    if (n < 0) n = 0;
-    /* Names come from batched metadata lookups. */
-    for (int i = 0; i < n && !player_quit; i += SPOTIFY_DETAILS_BATCH) {
-        int batch = n - i < SPOTIFY_DETAILS_BATCH ? n - i : SPOTIFY_DETAILS_BATCH;
-        spotify_sp_track_details(ctx.client_token, ctx.access_token, &out[i], batch);
-    }
-    return n;
+    return load_list_max(playlist_id, out, MAX_TRACKS, &open_fetched_count);
 }
 
 static void run_site_job(void)
@@ -981,9 +984,21 @@ static int loader_thread(SceSize args, void *argp)
         unsigned ctx_seq = ctx_req_seq;
         if (ctx_seq != ctx_done_seq) {
             int i = ctx_req_index;
-            ctx_done_count = load_context(i);
+            ctx_total_count = load_context(i);
+            ctx_done_count = visible_tracks(ctx_total_count, ctx_load_target);
             ctx_done_seq = ctx_seq;
-            log_printf("UI: %d songs in recent context %d\n", ctx_done_count, i);
+            log_printf("UI: %d songs in recent context %d (first %d)\n",
+                       ctx_total_count, i, ctx_done_count);
+            continue;
+        }
+        if (ctx_done_seq == ctx_req_seq && ctx_done_count < ctx_total_count &&
+            ctx_done_count < ctx_load_target) {
+            int next = visible_tracks(ctx_total_count, ctx_load_target);
+            if (ctx_fetched_count < next) {
+                fill_details(&ctx_tracks[ctx_fetched_count], next - ctx_fetched_count);
+                ctx_fetched_count = next;
+            }
+            ctx_done_count = next;
             continue;
         }
         unsigned site_seq = site_req_seq;
@@ -1015,10 +1030,22 @@ static int loader_thread(SceSize args, void *argp)
         unsigned seq = open_req_seq;
         if (seq != open_done_seq) {
             int p = open_req_playlist;
-            open_done_count = load_list(playlists[p].id, opened);
+            open_total_count = load_list(playlists[p].id, opened);
+            open_done_count = visible_tracks(open_total_count, open_load_target);
             open_done_playlist = p;
             open_done_seq = seq;
-            log_printf("UI: %d tracks in playlist %d\n", open_done_count, p);
+            log_printf("UI: %d tracks in playlist %d (first %d)\n",
+                       open_total_count, p, open_done_count);
+            continue;
+        }
+        if (open_done_seq == open_req_seq && open_done_count < open_total_count &&
+            open_done_count < open_load_target) {
+            int next = visible_tracks(open_total_count, open_load_target);
+            if (open_fetched_count < next) {
+                fill_details(&opened[open_fetched_count], next - open_fetched_count);
+                open_fetched_count = next;
+            }
+            open_done_count = next;
             continue;
         }
         if (!liked_ids_loaded) {
@@ -1660,12 +1687,12 @@ static void maybe_expand_visible_tracks(void)
     } else if (cat == UI_CAT_PLAYLISTS && xmb.level[cat] == 1 &&
                open_req_seq == open_done_seq && open_shown_seq == open_done_seq) {
         limit = &opened_visible_limit;
-        total = open_done_count;
+        total = open_total_count;
         level = 1;
     } else if (cat == UI_CAT_RECENT && xmb.level[cat] == 1 &&
                ctx_req_seq == ctx_done_seq && ctx_shown_seq == ctx_done_seq) {
         limit = &ctx_visible_limit;
-        total = ctx_done_count;
+        total = ctx_total_count;
         level = 1;
     }
     if (!limit) return;
@@ -1675,6 +1702,8 @@ static void maybe_expand_visible_tracks(void)
         *limit += songs_page_size();
         if (*limit > total) *limit = total;
         if (cat == UI_CAT_LIKED) liked_load_target = *limit;
+        if (cat == UI_CAT_PLAYLISTS) open_load_target = *limit;
+        if (cat == UI_CAT_RECENT) ctx_load_target = *limit;
     }
 }
 
@@ -1692,7 +1721,7 @@ static void sync_state(void)
         const int playing = current_index;
         if (playing >= 0 && playing < queue_len) mark_playing(queue[playing].id);
     }
-    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done;
+    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done && liked_ready < liked_visible_limit;
     ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
         sort_tracks(opened, open_done_count);
@@ -1733,14 +1762,22 @@ static void sync_state(void)
         xmb.lists[UI_CAT_RECENT][1].loading = 0;
         ctx_shown_seq = ctx_done_seq;
     }
-    /* Additional rows are already sorted in the underlying list. */
+    /* Metadata for the next page has arrived: publish only complete rows. */
     if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq &&
-        open_list->count < visible_tracks(open_done_count, opened_visible_limit))
-        open_list->count = visible_tracks(open_done_count, opened_visible_limit);
+        open_list->count < visible_tracks(open_done_count, opened_visible_limit)) {
+        int count = visible_tracks(open_done_count, opened_visible_limit);
+        track_rows(&opened[open_list->count], count - open_list->count,
+                   &opened_rows[open_list->count]);
+        open_list->count = count;
+    }
     ui_list *ctx_list = &xmb.lists[UI_CAT_RECENT][1];
     if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq &&
-        ctx_list->count < visible_tracks(ctx_done_count, ctx_visible_limit))
-        ctx_list->count = visible_tracks(ctx_done_count, ctx_visible_limit);
+        ctx_list->count < visible_tracks(ctx_done_count, ctx_visible_limit)) {
+        int count = visible_tracks(ctx_done_count, ctx_visible_limit);
+        track_rows(&ctx_tracks[ctx_list->count], count - ctx_list->count,
+                   &ctx_rows[ctx_list->count]);
+        ctx_list->count = count;
+    }
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
     if (search_done_seq == search_req_seq && search_shown_seq != search_done_seq) {
         track_rows(found, search_done_count, found_rows);
@@ -2342,6 +2379,8 @@ static void pref_changed(pref_id id)
     case PREF_SONGS_PER_LOAD:
         liked_visible_limit = opened_visible_limit = ctx_visible_limit = songs_page_size();
         liked_load_target = liked_visible_limit;
+        open_load_target = opened_visible_limit;
+        ctx_load_target = ctx_visible_limit;
         xmb.sel[UI_CAT_LIKED][0] = 0;
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
         xmb.sel[UI_CAT_RECENT][1] = 0;
@@ -2439,6 +2478,7 @@ static int handle(const ui_event *e)
             ui_open_level(&xmb, UI_CAT_PLAYLISTS);
             open_req_playlist = p;
             opened_visible_limit = songs_page_size();
+            open_load_target = opened_visible_limit;
             ++open_req_seq;
         } else if (e->category == UI_CAT_PLAYLISTS) {
             /* Only once the list on screen is the one in the buffer. */
@@ -2458,6 +2498,7 @@ static int handle(const ui_event *e)
             ui_open_level(&xmb, UI_CAT_RECENT);
             ctx_req_index = e->index;
             ctx_visible_limit = songs_page_size();
+            ctx_load_target = ctx_visible_limit;
             ++ctx_req_seq;
         } else if (e->category == UI_CAT_RECENT) {
             if (ctx_req_seq == ctx_done_seq && ctx_shown_seq == ctx_done_seq)
