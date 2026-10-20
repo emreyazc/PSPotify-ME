@@ -67,6 +67,7 @@ static ui_row liked_rows[MAX_TRACKS], opened_rows[MAX_TRACKS];
  * liked_ready counts the songs with names, liked_shown those turned into
  * rows. */
 static volatile int liked_done, liked_count, liked_ready, liked_ids_loaded;
+static void sort_tracks(spotify_track *tracks, int count);
 static int liked_shown;
 static int liked_sort_applied;    /* final sort after the loader finishes metadata */
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
@@ -1015,6 +1016,11 @@ static int loader_thread(SceSize args, void *argp)
             int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username, "",
                                       liked, MAX_TRACKS);
             liked_count = n > 0 ? n : 0;
+            /* Date and source-order sorting needs IDs only. Sort before
+             * incremental metadata loads so the visible rows start in order. */
+            if (prefs[PREF_TRACK_SORT] != TRACK_SORT_TITLE &&
+                prefs[PREF_TRACK_SORT] != TRACK_SORT_ARTIST)
+                sort_tracks(liked, liked_count);
             liked_ids_loaded = 1;
             if (!liked_count) liked_done = 1;
             continue;
