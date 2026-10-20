@@ -68,6 +68,7 @@ typedef struct {
     char id[24];          /* base62; empty = the user's Liked Songs */
     char name[96];        /* UTF-8 */
     int total;
+    char owner[64];      /* MetaItem.owner_username; empty when unavailable */
     char image[160];      /* cover image URL, small size preferred; may be empty */
 } spotify_playlist;
 
