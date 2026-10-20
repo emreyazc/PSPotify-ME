@@ -882,12 +882,6 @@ static int load_list_max(const char *playlist_id, spotify_track *out, int max, i
     return n;
 }
 
-static int is_collection(const char *uri)
-{
-    size_t n = strlen(uri);
-    return n > 11 && strcmp(uri + n - 11, ":collection") == 0;
-}
-
 static void load_recent(void)
 {
     memset(recent_tracks, 0, sizeof recent_tracks);
@@ -1485,7 +1479,7 @@ static void assign_thumbs(void)
     if (prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;     /* no covers to show */
     for (int lvl = 0; lvl < 2; ++lvl) {
         ui_list *list = &xmb.lists[cat][lvl];
-        if (!list->rows || list->count <= 0) continue;
+        if (!list->rows || list->count <= 0 || (cat == UI_CAT_RECENT && lvl != 0)) continue;
         if (lvl != xmb.level[cat] && (xmb.level_pos[cat] < 0.02f || xmb.level_pos[cat] > 0.98f))
             continue;
         /* The rows on screen: one above the selection and about three below. */
@@ -1571,7 +1565,7 @@ static void mark_playing(const char *id)
     if (open_shown_seq == open_done_seq && open_list->count > 0)
         for (int i = 0; i < open_list->count; ++i)
             opened_rows[i].playing = id && !strcmp(opened[i].id, id);
-    if (recent_shown_seq == recent_done_seq)
+    if (recent_req_seq == recent_done_seq && recent_shown_seq == recent_done_seq)
         for (int i = 0; i < recent_count; ++i)
             recent_rows[i].playing = id && !strcmp(recent_tracks[i].id, id);
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
