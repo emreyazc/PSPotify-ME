@@ -2387,6 +2387,14 @@ static void pref_changed(pref_id id)
         xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
         xmb.sel[UI_CAT_RECENT][1] = 0;
         refresh_sorted_tracks();
+        if (!liked_done) {
+            liked_shown = visible_tracks(liked_ready, liked_visible_limit);
+            xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
+        }
+        /* Album/artist contexts keep their original order but still page. */
+        if (ctx_done_seq == ctx_req_seq && ctx_shown_seq == ctx_done_seq)
+            xmb.lists[UI_CAT_RECENT][1].count =
+                visible_tracks(ctx_done_count, ctx_visible_limit);
         break;
     case PREF_TRACK_SORT:
         /* Finish partially loaded Liked Songs before switching sort order. */
