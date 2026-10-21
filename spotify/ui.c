@@ -120,6 +120,8 @@ static volatile int request_index = -1;
 static volatile int current_index = -1;
 static volatile play_state_t play_state = PS_IDLE;
 static volatile int player_quit;
+/* The UI and thumbnail worker share this; playback cover downloads are separate. */
+static volatile int thumbs_enabled = 1;
 static volatile int me_dead;
 static volatile int last_error;    /* why the last track could not play */
 
@@ -1388,8 +1390,6 @@ typedef struct thumb_slot {
 static thumb_slot thumbs[THUMB_SLOTS];
 static SceUID thumb_lock = -1;
 static volatile unsigned frame_no;
-/* UI and thumbnail worker share this flag; Now Playing artwork is independent. */
-static volatile int thumbs_enabled = 1;
 static uint32_t thumb_px[THUMB * THUMB];
 static volatile int thumb_px_slot = -1;     /* slot whose pixels wait for upload */
 
