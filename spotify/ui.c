@@ -1451,7 +1451,6 @@ static r_tex *thumb_for(const char *url, int priority)
     return tex;
 }
 
-/* Turns a downloaded thumbnail into a texture. UI thread. */
 /* Called on the UI thread when artwork is disabled.  Release cached GPU
  * textures and cancel pending requests, without affecting Now Playing. */
 static void clear_thumbs(void)
@@ -1470,6 +1469,7 @@ static void clear_thumbs(void)
     sceKernelSignalSema(thumb_lock, 1);
 }
 
+/* Turns a downloaded thumbnail into a texture. UI thread. */
 static void upload_thumb(void)
 {
     int slot = thumb_px_slot;
@@ -1517,6 +1517,8 @@ static int thumb_thread(SceSize args, void *argp)
             sceKernelDelayThread(30000);
             continue;
         }
+        /* A setting change may have disabled artwork after selection. */
+        if (!thumbs_enabled) continue;
         if (fetch_image(url, jpeg, sizeof jpeg, scaled, THUMB) < 0) {
             sceKernelWaitSema(thumb_lock, 1, NULL);
             if (thumbs[slot].state == THUMB_LOADING && !strcmp(thumbs[slot].url, url))
