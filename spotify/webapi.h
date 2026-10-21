@@ -85,9 +85,13 @@ typedef struct {
     uint8_t has_thumb;
 } spotify_track;
 
-/* The user's playlists (rootlist, folders flattened). */
+/* Rootlist pages are scanned separately from the display caps.
+ * 'out' receives up to max playlists in Spotify order. 'owned' receives
+ * up to owned_max playlists created by the signed-in account.
+ * Returns regular count and writes owned_count (0 on failure). */
 int spotify_sp_playlists(const char *client_token, const char *access_token,
-                         const char *username, spotify_playlist *out, int max);
+                         const char *username, spotify_playlist *out, int max,
+                         spotify_playlist *owned, int owned_max, int *owned_count);
 /* Track ids of Liked Songs (playlist_id empty) or of a playlist; episodes
  * and local files are skipped. Names are filled by spotify_sp_track_details. */
 int spotify_sp_tracks(const char *client_token, const char *access_token,
