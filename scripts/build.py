@@ -63,11 +63,18 @@ def prepare_dependencies(cmake, generator):
             run("git", "-C", source, "checkout", "--detach", revision)
         if run("git", "-C", source, "rev-parse", "HEAD", capture=True) != revision:
             raise RuntimeError(f"{name}: wrong dependency revision; refusing to reset local work")
-        reverse = subprocess.run(["git", "-C", str(source), "apply", "--reverse",
-                                  "--check", str(patch)], capture_output=True)
+        # Windows may check out .patch files with CRLF while Docker clones
+        # dependency sources with LF. Normalize the patch in memory so both
+        # platforms apply the same changes without modifying tracked files.
+        patch_data = patch.read_bytes().replace(b"\r\n", b"\n")
+        apply_cmd = ["git", "-C", str(source), "apply", "--ignore-space-change"]
+        reverse = subprocess.run(
+            [*apply_cmd, "--reverse", "--check", "-"],
+            input=patch_data, capture_output=True)
         if reverse.returncode != 0:
-            run("git", "-C", source, "apply", "--check", patch)
-            run("git", "-C", source, "apply", patch)
+            subprocess.run([*apply_cmd, "--check", "-"],
+                           input=patch_data, check=True)
+            subprocess.run([*apply_cmd, "-"], input=patch_data, check=True)
         build = source / "build-pinned"
         options = ["-DPRX_FREE=0"] if name == "safe-task" else []
         configure(cmake, source, build, generator, *options)

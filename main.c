@@ -116,6 +116,14 @@ static int network_probe(void)
         log_printf("WARNING: WLAN switch is physically OFF!\n");
     }
 
+    /* Reuse an already established connection if the firmware kept it. */
+    int current_state = PSP_NET_APCTL_STATE_DISCONNECTED;
+    if (sceNetApctlGetState(&current_state) == 0 &&
+        current_state == PSP_NET_APCTL_STATE_GOT_IP) {
+        log_printf("Wi-Fi: Reusing an existing connection\n");
+        return 0;
+    }
+
     int valid_profiles[16];
     int valid_count = 0;
 
@@ -133,46 +141,88 @@ static int network_probe(void)
         return -112;
     }
 
-    int connected_profile = -1;
+    /* A successful sceNetApctlConnect() only starts the attempt.  Wait for
+     * GOT_IP for each saved profile before deciding that it works. */
+    int last_error = -110;
     for (int p = 0; p < valid_count; ++p) {
-        int prof = valid_profiles[p];
+        const int prof = valid_profiles[p];
+        log_printf("Wi-Fi: Trying profile %d (%d/%d)...\n",
+                   prof, p + 1, valid_count);
+
         ret = sceNetApctlConnect(prof);
-        if (ret == 0) {
-            connected_profile = prof;
-            break;
+        if (ret < 0) {
+            log_printf("Wi-Fi: Profile %d request failed: 0x%08X\n",
+                       prof, (unsigned int)ret);
+            last_error = ret;
+            continue;
         }
-    }
 
-    if (connected_profile < 0) {
-        log_printf("Wi-Fi: Connect failed!\n");
-        return ret;
-    }
-
-    log_printf("Wi-Fi: Connecting (Profile %d)...", connected_profile);
-
-    for (unsigned int attempt = 0; attempt < 300u; ++attempt) {
-        int state = PSP_NET_APCTL_STATE_DISCONNECTED;
-        ret = sceNetApctlGetState(&state);
-        if (ret < 0) return ret;
-
-        if (state == PSP_NET_APCTL_STATE_GOT_IP) {
-            union SceNetApctlInfo info;
-            memset(&info, 0, sizeof info);
-            if (sceNetApctlGetInfo(8, &info) >= 0) {
-                log_printf(" OK! (IP: %s)\n", info.ip);
-            } else {
-                log_printf(" OK!\n");
+        unsigned int attempt = 0;
+        for (; attempt < 300u; ++attempt) {
+            int state = PSP_NET_APCTL_STATE_DISCONNECTED;
+            ret = sceNetApctlGetState(&state);
+            if (ret < 0) {
+                log_printf("Wi-Fi: Profile %d state error: 0x%08X\n",
+                           prof, (unsigned int)ret);
+                last_error = ret;
+                break;
             }
-            return 0;
+
+            if (state == PSP_NET_APCTL_STATE_GOT_IP) {
+                union SceNetApctlInfo info;
+                memset(&info, 0, sizeof info);
+                if (sceNetApctlGetInfo(PSP_NET_APCTL_INFO_IP, &info) >= 0)
+                    log_printf("Wi-Fi: Profile %d connected (IP: %s)\n", prof, info.ip);
+                else
+                    log_printf("Wi-Fi: Profile %d connected\n", prof);
+                return 0;
+            }
+
+            /* Allow startup time for association before treating idle state
+             * as a failed profile.  An unreachable AP may stay disconnected. */
+            if (state == PSP_NET_APCTL_STATE_DISCONNECTED && attempt > 40u) {
+                log_printf("Wi-Fi: Profile %d disconnected\n", prof);
+                last_error = -111;
+                break;
+            }
+            sceKernelDelayThread(100000);
         }
-        if (state == PSP_NET_APCTL_STATE_DISCONNECTED && attempt > 40u) {
-            log_printf(" Disconnected\n");
-            return -111;
+
+        if (attempt == 300u) {
+            log_printf("Wi-Fi: Profile %d timed out\n", prof);
+            last_error = -110;
         }
-        sceKernelDelayThread(100000);
+
+        /* A failed asynchronous connection must be torn down before another
+         * profile can be selected.  Never leave two attempts in flight. */
+        ret = sceNetApctlDisconnect();
+        if (ret < 0)
+            log_printf("Wi-Fi: Profile %d disconnect request: 0x%08X\n",
+                       prof, (unsigned int)ret);
+
+        int disconnected = 0;
+        for (unsigned int wait = 0; wait < 40u; ++wait) {
+            int state = -1;
+            ret = sceNetApctlGetState(&state);
+            if (ret < 0) {
+                log_printf("Wi-Fi: Disconnect state error: 0x%08X\n",
+                           (unsigned int)ret);
+                return ret;
+            }
+            if (state == PSP_NET_APCTL_STATE_DISCONNECTED) {
+                disconnected = 1;
+                break;
+            }
+            sceKernelDelayThread(100000);
+        }
+        if (!disconnected) {
+            log_printf("Wi-Fi: Could not disconnect profile %d safely\n", prof);
+            return -113;
+        }
     }
-    log_printf(" Timeout\n");
-    return -110;
+
+    log_printf("Wi-Fi: All %d saved profiles failed\n", valid_count);
+    return last_error;
 }
 
 // These callbacks run on SC in kernel mode through the embedded bridge PRX.

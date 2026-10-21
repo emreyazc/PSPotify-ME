@@ -6,6 +6,8 @@
 int prefs[PREF_COUNT];
 
 static const char *const on_off_tokens[] = { "off", "on" };
+static const char *const language_names[] = { "English", "Türkçe" };
+static const char *const language_tokens[] = { "en", "tr" };
 static const char *const off_on[] = { "Off", "On" };
 static const char *const background_names[] = { "Plain", "Blurred cover", "Theme wallpaper" };
 static const char *const background_tokens[] = { "plain", "blurred_cover", "wallpaper" };
@@ -23,12 +25,20 @@ static const char *const hint_names[] = { "Shown", "Hidden" };
 static const char *const hint_tokens[] = { "shown", "hidden" };
 /* The order of ui.c's start_categories[]. */
 static const char *const start_names[] = { "Playlists", "Liked Songs", "Search", "Recent",
-                                           "Now Playing" };
-static const char *const start_tokens[] = { "playlists", "liked", "search", "recent", "now" };
+                                           "Now Playing", "My Playlists" };
+static const char *const start_tokens[] = { "playlists", "liked", "search", "recent", "now", "my_playlists" };
 static const char *const now_names[] = { "Classic", "Centered", "Text only" };
 static const char *const now_tokens[] = { "classic", "centered", "text" };
 static const char *const sort_names[] = { "Spotify order", "Name", "Most songs" };
 static const char *const sort_tokens[] = { "spotify", "name", "size" };
+static const char *const track_sort_names[] = {
+    "Newest first", "Oldest first", "Title A-Z", "Artist A-Z"
+};
+static const char *const track_sort_tokens[] = {
+    "newest", "oldest", "title", "artist"
+};
+static const char *const songs_per_load_names[] = { "25 songs", "50 songs", "75 songs", "100 songs" };
+static const char *const songs_per_load_tokens[] = { "25", "50", "75", "100" };
 /* player_eq_names, then the user's own. */
 static const char *const eq_names[PLAYER_EQ_PRESETS + 1] = {
     "Off", "Bass boost", "Treble boost", "Vocal", "Rock", "Pop", "Loudness", "Custom"
@@ -73,12 +83,18 @@ static pref_def defs[PREF_COUNT] = {
                           hint_tokens, 0),
     [PREF_VISUALIZER] = CHOICE("visualizer", "Visualizer on Now Playing", PREF_GROUP_APPEARANCE,
                                off_on, on_off_tokens, 0),
+    [PREF_LANGUAGE] = CHOICE("language", "Language", PREF_GROUP_APPEARANCE,
+                              language_names, language_tokens, 0),
     [PREF_START] = CHOICE("start_screen", "Start screen", PREF_GROUP_LAYOUT, start_names,
                           start_tokens, 0),
     [PREF_NOW_LAYOUT] = CHOICE("now_playing", "Now Playing", PREF_GROUP_LAYOUT, now_names,
                                now_tokens, 0),
     [PREF_PLAYLIST_SORT] = CHOICE("playlist_sort", "Sort playlists", PREF_GROUP_LAYOUT,
                                   sort_names, sort_tokens, 0),
+    [PREF_TRACK_SORT] = CHOICE("track_sort", "Sort songs", PREF_GROUP_LAYOUT,
+                               track_sort_names, track_sort_tokens, TRACK_SORT_NEWEST),
+    [PREF_SONGS_PER_LOAD] = CHOICE("songs_per_load", "Songs per load", PREF_GROUP_LAYOUT,
+                                   songs_per_load_names, songs_per_load_tokens, 3),
     [PREF_EQUALIZER] = CHOICE("equalizer", "Equalizer", PREF_GROUP_SOUND, eq_names, NULL, 0),
     [PREF_EQ_60] = BAND("eq_60", "60 Hz (bass)"),
     [PREF_EQ_230] = BAND("eq_230", "230 Hz"),
@@ -132,6 +148,12 @@ int prefs_read(const char *key, const char *value)
         const pref_def *d = &defs[i];
         if (strcmp(d->key, key) != 0) continue;
         if (d->transient) return 1;
+        /* Old settings.ini files may still store track_sort = spotify.
+         * That display option has been removed; migrate it to newest first. */
+        if (i == PREF_TRACK_SORT && strcmp(value, "spotify") == 0) {
+            prefs[i] = TRACK_SORT_NEWEST;
+            return 1;
+        }
         if (d->tokens) {
             for (int v = 0; v < d->count; ++v)
                 if (!strcmp(d->tokens[v], value)) prefs[i] = v;

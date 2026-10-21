@@ -16,6 +16,7 @@ enum {
     UI_CAT_NOW,
     UI_CAT_QUEUE,
     UI_CAT_SETTINGS,
+    UI_CAT_MY_PLAYLISTS,  /* append to preserve old category IDs */
     UI_CATS
 };
 
@@ -150,6 +151,7 @@ typedef struct ui_state {
     int moving;             /* a row of a movable list is picked up */
     char toast[64];         /* a short note at the bottom, e.g. "Added to queue" */
     float toast_left;
+    float volume_popup_left; /* seconds until the volume indicator disappears */
     ui_event events[UI_MAX_EVENTS];
     int event_count;
 
@@ -158,6 +160,11 @@ typedef struct ui_state {
     unsigned buttons;
     float repeat_at, lr_held, lr_seek_at;
 } ui_state;
+
+/* Shared English -> Turkish UI dictionary; Spotify song/playlist names are
+ * never translated. 0 = English, 1 = Turkish. */
+void ui_set_language(int language);
+const char *ui_tr(const char *english);
 
 int ui_init(ui_state *ui);
 /* Opens a menu for the row the last UI_EV_OPTIONS came from. */

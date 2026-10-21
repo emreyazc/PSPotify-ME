@@ -68,6 +68,7 @@ typedef struct {
     char id[24];          /* base62; empty = the user's Liked Songs */
     char name[96];        /* UTF-8 */
     int total;
+    char owner[64];      /* MetaItem.owner_username; empty when unavailable */
     char image[160];      /* cover image URL, small size preferred; may be empty */
 } spotify_playlist;
 
@@ -76,30 +77,31 @@ typedef struct {
     char name[96];
     char artist[64];
     unsigned int duration_ms;
+    uint64_t added_at;     /* collection added_at / playlist item timestamp; 0 if unknown */
+    int source_index;      /* original order returned by Spotify */
     uint8_t cover[20];    /* album cover image file id (i.scdn.co/image/<hex>) */
     uint8_t has_cover;
     uint8_t thumb[20];    /* the same cover at 64x64, for list rows */
     uint8_t has_thumb;
 } spotify_track;
 
-/* The user's playlists (rootlist, folders flattened). */
+/* Rootlist pages are scanned separately from the display caps.
+ * 'out' receives up to max playlists in Spotify order. 'owned' receives
+ * up to owned_max playlists created by the signed-in account.
+ * Returns regular count and writes owned_count (0 on failure). */
 int spotify_sp_playlists(const char *client_token, const char *access_token,
-                         const char *username, spotify_playlist *out, int max);
+                         const char *username, spotify_playlist *out, int max,
+                         spotify_playlist *owned, int owned_max, int *owned_count);
 /* Track ids of Liked Songs (playlist_id empty) or of a playlist; episodes
  * and local files are skipped. Names are filled by spotify_sp_track_details. */
 int spotify_sp_tracks(const char *client_token, const char *access_token,
                       const char *username, const char *playlist_id,
                       spotify_track *out, int max);
-/* A playback context: playlist, album, artist or the user's Liked Songs. */
-typedef struct {
-    char uri[64];
-    char name[96];
-} spotify_context;
-
-/* The contexts the user played recently, newest first. Names are filled
- * for playlists already known; spotify_sp_context gives the others. */
-int spotify_sp_recent(const char *client_token, const char *access_token,
-                      const char *username, spotify_context *out, int max);
+/* Recently played track IDs (most recent first), with repeated IDs
+ * collapsed to their latest occurrence. Names come from track_details.
+ * Returns a negative status on network/API failure. */
+int spotify_sp_recent_tracks(const char *client_token, const char *access_token,
+                             const char *username, spotify_track *out, int max);
 /* Resolves a context URI: its display name (may be empty) and its first
  * page of songs, ids only. Returns the number of songs. */
 int spotify_sp_context(const char *client_token, const char *access_token, const char *uri,

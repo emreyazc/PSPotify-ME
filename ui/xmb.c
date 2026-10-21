@@ -6,6 +6,221 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Shared UI translations. English strings remain canonical so existing
+ * themes, saved settings and user-supplied song names are not changed. */
+static int ui_language;
+
+void ui_set_language(int language) { ui_language = language == 1 ? 1 : 0; }
+
+const char *ui_tr(const char *english)
+{
+    if (!english || !ui_language) return english;
+    static const struct { const char *en, *tr; } messages[] = {
+        { "Search", "Ara" },
+        { "%d results", "%d sonuç" },
+        { "Install now", "Şimdi yükle" },
+        { "Not now", "Şimdi değil" },
+        { "Quit now and start it again", "Şimdi çık ve yeniden aç" },
+        { "Later", "Sonra" },
+        { "Select to download", "İndirmek için seç" },
+        { "Theme installed", "Tema yüklendi" },
+        { "Couldn't download the theme", "Tema indirilemedi" },
+        { "Couldn't check for updates", "Güncellemeler kontrol edilemedi" },
+        { "Update failed, nothing changed", "Güncelleme başarısız, değişiklik yapılmadı" },
+        { "Play", "Çal" },
+
+        { "↑↓ Move", "↑↓ Taşı" },
+        { "↑↓ Vol", "↑↓ Ses" },
+        { "SELECT Move", "SELECT Taşı" },
+        { "Installed · select to download again", "Yüklü · tekrar indirmek için seç" },
+        { "Couldn't check · select to try again", "Kontrol edilemedi · tekrar dene" },
+        { "Update failed, nothing changed · select to try again", "Güncelleme başarısız · tekrar dene" },
+        { "Couldn't play: not enough memory", "Çalınamadı: yetersiz bellek" },
+        { "Spotify refused this track (Premium needed?)", "Spotify şarkıyı reddetti (Premium gerekli mi?)" },
+        { "No playable version of this track", "Çalınabilir sürüm bulunamadı" },
+        { "Couldn't play this track", "Şarkı çalınamadı" },
+        { "Loading your library…", "Kütüphanen yükleniyor…" },
+        { "Stopping…", "Kapatılıyor…" },
+        { "Could not sign in to Spotify", "Spotify oturumu açılamadı" },
+        { "Good night", "İyi geceler" },
+        { "Downloading the update…", "Güncelleme indiriliyor…" },
+        { "This theme has no wallpaper", "Bu temada duvar kâğıdı yok" },
+        { "Shows once a song with a cover plays", "Kapaklı şarkı çalınca gösterilir" },
+        { "Sleep timer: paused", "Uyku sayacı: duraklatıldı" },
+        { "16 themes at most: remove one from THEMES", "En fazla 16 tema: THEMES'den birini sil" },
+        { "Still busy: try in Settings → About", "Meşgul: Ayarlar → Hakkında'dan dene" },
+        { "Settings → About installs it later", "Sonra Ayarlar → Hakkında'dan yükleyebilirsin" },
+        { "Updated: the new version starts next time", "Güncellendi: yeni sürüm sonraki açılışta başlar" },
+        { "The PSP turns off when the timer ends", "Sayaç bitince PSP kapanır" },
+        { "Playback pauses when the timer ends", "Sayaç bitince oynatma duraklar" },
+        { "This theme has no wallpaper", "Bu temada duvar kâğıdı yok" },
+
+        { "Recent", "Son Dinlenenler" },
+        { "Liked Songs", "Beğenilen Şarkılar" },
+        { "Playlists", "Çalma Listeleri" },
+        { "My Playlists", "Listelerim" },
+        { "Now Playing", "Şimdi Çalıyor" },
+        { "Queue", "Çalma Kuyruğu" },
+        { "Settings", "Ayarlar" },
+        { "Play", "Çal" },
+        { "Pause", "Duraklat" },
+        { "Open", "Aç" },
+        { "Back", "Geri" },
+        { "Select", "Seç" },
+        { "Change", "Değiştir" },
+        { "Done", "Bitti" },
+        { "Options", "Seçenekler" },
+        { "Shuffle", "Karıştır" },
+        { "Repeat", "Tekrarla" },
+        { "Pin", "Sabitle" },
+        { "Unpin", "Sabitlemeyi Kaldır" },
+        { "Pin to the top", "Üste Sabitle" },
+        { "Playing", "Çalıyor" },
+        { "Pinned to the top", "Üste sabitlendi" },
+        { "Unpinned", "Sabitleme kaldırıldı" },
+        { "Loading…", "Yükleniyor…" },
+        { "Searching…", "Aranıyor…" },
+        { "Nothing here yet", "Henüz içerik yok" },
+        { "Nothing playing", "Çalan şarkı yok" },
+        { "Pick a song in Liked Songs, Playlists or Search.", "Beğenilenler, Listeler veya Ara'dan şarkı seç." },
+        { "Press □ to search Spotify", "Spotify'da aramak için □ tuşuna bas" },
+        { "Themes", "Temalar" },
+        { "Theme gallery", "Tema galerisi" },
+        { "Appearance", "Görünüm" },
+        { "Layout", "Yerleşim" },
+        { "Categories", "Kategoriler" },
+        { "Sound", "Ses" },
+        { "Playback", "Oynatma" },
+        { "Controls", "Kontroller" },
+        { "About", "Hakkında" },
+        { "Quit", "Çıkış" },
+        { "Language", "Dil" },
+        { "Colors and wallpapers from the THEMES folder", "THEMES klasöründeki renkler ve duvar kâğıtları" },
+        { "Download themes from the PSPotify ME site", "PSPotify ME sitesinden temaları indir" },
+        { "Background, covers, text and animations", "Arka plan, kapaklar, metin ve animasyonlar" },
+        { "Start screen, Now Playing and playlists", "Başlangıç ekranı, oynatıcı ve listeler" },
+        { "Reorder or hide the categories", "Kategorileri sırala veya gizle" },
+        { "Equalizer and loudness", "Ekolayzır ve ses düzeyi" },
+        { "Sleep timer, battery and CPU speed", "Uyku sayacı, pil ve işlemci hızı" },
+        { "Buttons and the headphone remote", "Tuşlar ve kulaklık kumandası" },
+        { "Version and updates", "Sürüm ve güncellemeler" },
+        { "Back to the PSP menu (START does it too)", "PSP menüsüne dön (START ile de çıkılır)" },
+        { "Cover colors", "Kapak renkleri" },
+        { "Background", "Arka plan" },
+        { "Cover shape", "Kapak şekli" },
+        { "Text size", "Yazı boyutu" },
+        { "List style", "Liste biçimi" },
+        { "Animations", "Animasyonlar" },
+        { "Clock", "Saat" },
+        { "Button hints", "Tuş ipuçları" },
+        { "Visualizer on Now Playing", "Çalma ekranında görselleştirme" },
+        { "Start screen", "Başlangıç ekranı" },
+        { "Sort playlists", "Çalma listelerini sırala" },
+        { "Sort songs", "Şarkıları sırala" },
+        { "Songs per load", "Yükleme başına şarkı" },
+        { "Equalizer", "Ekolayzır" },
+        { "Same loudness for every song", "Şarkıların sesini eşitle" },
+        { "Sleep timer", "Uyku sayacı" },
+        { "When the timer ends", "Sayaç bitince" },
+        { "Battery saver", "Pil tasarrufu" },
+        { "CPU speed", "İşlemci hızı" },
+        { "Spotify Connect", "Spotify Connect" },
+        { "Confirm button", "Onay tuşu" },
+        { "L and R", "L ve R" },
+        { "Volume step", "Ses adımı" },
+        { "Headphone remote", "Kulaklık kumandası" },
+        { "Check for updates at start", "Başlangıçta güncelleme kontrolü" },
+        { "On", "Açık" },
+        { "Off", "Kapalı" },
+        { "Plain", "Düz" },
+        { "Blurred cover", "Bulanık kapak" },
+        { "Theme wallpaper", "Tema duvar kâğıdı" },
+        { "Square", "Kare" },
+        { "Rounded", "Yuvarlatılmış" },
+        { "Circle", "Daire" },
+        { "Normal", "Normal" },
+        { "Small", "Küçük" },
+        { "Large", "Büyük" },
+        { "Comfortable", "Rahat" },
+        { "Compact", "Sıkışık" },
+        { "Text only", "Yalnızca yazı" },
+        { "Smooth", "Akıcı" },
+        { "Fast", "Hızlı" },
+        { "Hidden", "Gizli" },
+        { "Shown", "Görünür" },
+        { "Centered", "Ortalanmış" },
+        { "Classic", "Klasik" },
+        { "Spotify order", "Spotify sırası" },
+        { "Name", "Ad" },
+        { "Most songs", "En çok şarkı" },
+        { "Newest first", "En yeni önce" },
+        { "Oldest first", "En eski önce" },
+        { "Title A-Z", "Başlık A-Z" },
+        { "Artist A-Z", "Sanatçı A-Z" },
+        { "All", "Tümü" },
+        { "One", "Bir" },
+        { "15 min", "15 dk" },
+        { "30 min", "30 dk" },
+        { "45 min", "45 dk" },
+        { "60 min", "60 dk" },
+        { "90 min", "90 dk" },
+        { "Turn off the PSP", "PSP'yi kapat" },
+        { "222 MHz (saves battery)", "222 MHz (pil tasarrufu)" },
+        { "333 MHz (fastest)", "333 MHz (en hızlı)" },
+        { "Cross", "Çarpı" },
+        { "Seek", "İleri/geri sar" },
+        { "Skip", "Şarkı atla" },
+        { "Tap skips, hold seeks", "Basınca atla, basılı tutunca sar" },
+        { "2%", "2%" },
+        { "Pinned", "Sabitlendi" },
+        { "Playlist", "Çalma Listesi" },
+        { "Theme", "Tema" },
+        { "Active", "Etkin" },
+        { "Downloading…", "İndiriliyor…" },
+        { "Up to date", "Güncel" },
+        { "Always shown", "Her zaman görünür" },
+        { "Installed", "Yüklü" },
+        { "Select to download", "İndirmek için seç" },
+        { "Select to check for updates", "Güncelleme kontrolü için seç" },
+        { "Couldn't reach the theme site", "Tema sitesine ulaşılamadı" },
+        { "Check the Wi-Fi · select to try again", "Wi-Fi kontrol et · yeniden denemek için seç" },
+        { "Play now", "Şimdi çal" },
+        { "Remove from queue", "Kuyruktan çıkar" },
+        { "Add to queue", "Kuyruğa ekle" },
+        { "Remove from Liked Songs", "Beğenilenlerden çıkar" },
+        { "Save to Liked Songs", "Beğenilenlere ekle" },
+        { "Added to queue", "Kuyruğa eklendi" },
+        { "The queue is full", "Kuyruk dolu" },
+        { "Removed from queue", "Kuyruktan çıkarıldı" },
+        { "Couldn't load listening history", "Dinleme geçmişi yüklenemedi" },
+        { "Couldn't update Liked Songs", "Beğenilenler güncellenemedi" },
+        { "Still saving the last change", "Önceki değişiklik kaydediliyor" },
+        { "Still busy, try again in a moment", "Şu an meşgul, birazdan tekrar dene" },
+        { "Theme installed", "Tema yüklendi" },
+        { "Couldn't download the theme", "Tema indirilemedi" },
+        { "Couldn't check for updates", "Güncellemeler kontrol edilemedi" },
+        { "Update failed, nothing changed", "Güncelleme başarısız; değişiklik yapılmadı" },
+        { "Settings stays, so you can come back", "Geri dönebilmen için Ayarlar görünür kalır" },
+        { "The new version starts next time", "Yeni sürüm sonraki açılışta başlayacak" },
+        { "Up to 16 pins", "En fazla 16 sabitleme" },
+        { "Theme wallpaper (this theme has none)", "Tema duvar kâğıdı (bu temada yok)" },
+        { "Search Spotify", "Spotify'da ara" },
+        { "Search for songs", "Şarkı ara" },
+        { "Bass boost", "Basları artır" },
+        { "Treble boost", "Tizleri artır" },
+        { "Vocal", "Vokal" },
+        { "Custom", "Özel" },
+        { "Loudness", "Ses dengesi" },
+        { "Rock", "Rock" },
+        { "Pop", "Pop" },
+        { "Gallery", "Galeri" },
+        { "Wallpaper", "Duvar kâğıdı" },
+    };
+    for (size_t i = 0; i < sizeof messages / sizeof messages[0]; ++i)
+        if (strcmp(messages[i].en, english) == 0) return messages[i].tr;
+    return english;
+}
+
 #define SCREEN_W 480
 #define SCREEN_H 272
 #define CAT_BOTTOM 80       /* category icons and the label sit on this line */
@@ -17,10 +232,12 @@
 #define SEEK_HOLD 0.45f     /* L/R held longer than this seeks */
 
 static const char *const cat_names[UI_CATS] = {
-    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings"
+    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings",
+    "My Playlists"
 };
 static const unsigned cat_icons[UI_CATS] = {
-    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS
+    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
+    ICON_USER
 };
 
 static float clampf(float v, float lo, float hi)
@@ -128,7 +345,7 @@ void ui_menu_open(ui_state *ui, const char *const *items, int count)
 {
     ui_menu *m = &ui->menu;
     if (count > UI_MENU_ITEMS) count = UI_MENU_ITEMS;
-    for (int i = 0; i < count; ++i) copy_label(m->items[i], sizeof m->items[i], items[i]);
+    for (int i = 0; i < count; ++i) copy_label(m->items[i], sizeof m->items[i], ui_tr(items[i]));
     m->count = count;
     m->title[0] = '\0';
     m->sel = 0;
@@ -137,7 +354,7 @@ void ui_menu_open(ui_state *ui, const char *const *items, int count)
 
 void ui_toast(ui_state *ui, const char *text)
 {
-    copy_label(ui->toast, sizeof ui->toast, text);
+    copy_label(ui->toast, sizeof ui->toast, ui_tr(text));
     ui->toast_left = 2.0f;
 }
 
@@ -233,6 +450,7 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
         volume = volume < 0 ? 0 : volume > 100 ? 100 : volume;
         if (volume != ui->volume) {
             ui->volume = volume;
+            ui->volume_popup_left = 2.0f;
             emit(ui, UI_EV_VOLUME, volume);
         }
     } else {
@@ -300,6 +518,7 @@ static void animate(ui_state *ui, float dt)
     ui->cat_pos = approach(ui->cat_pos, (float)cat_slot(ui, ui->cat), anim_rate(ui, 14.0f), dt);
     ui->menu_pos = approach(ui->menu_pos, ui->menu.open ? 1.0f : 0.0f, anim_rate(ui, 18.0f), dt);
     if (ui->toast_left > 0) ui->toast_left -= dt;
+    if (ui->volume_popup_left > 0) ui->volume_popup_left -= dt;
     const float fade = 1.0f - expf(-anim_rate(ui, 6.0f) * dt);
     ui_theme *th = &ui->theme;
     const ui_theme *to = &ui->theme_target;
@@ -357,7 +576,7 @@ static void hint(float *x, unsigned icon, const char *label, uint32_t color)
 {
     font_icon(icon, 10, *x, 6, color);
     *x += 13;
-    *x += font_draw(FONT_REGULAR, 10, *x, 3, color, label) + 10;
+    *x += font_draw(FONT_REGULAR, 10, *x, 3, color, ui_tr(label)) + 10;
 }
 
 static void draw_top(const ui_state *ui)
@@ -370,7 +589,8 @@ static void draw_top(const ui_state *ui)
     const unsigned ok = ui->style.swap_confirm ? ICON_CIRCLE : ICON_CROSS;
     const unsigned back = ui->style.swap_confirm ? ICON_CROSS : ICON_CIRCLE;
     if (ui->moving) {
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "\xE2\x86\x91\xE2\x86\x93 Move") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim,
+                       ui_tr("\xE2\x86\x91\xE2\x86\x93 Move")) + 10;
         hint(&x, ok, "Done", t->dim);
         cat = -1;
     } else if (ui->style.hide_hints) {
@@ -380,7 +600,7 @@ static void draw_top(const ui_state *ui)
         hint(&x, ok, "Change", t->dim);
         hint(&x, back, "Back", t->dim);
         if (ui->lists[cat][lvl].movable)
-            x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "SELECT Move") + 10;
+            x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, ui_tr("SELECT Move")) + 10;
         cat = -1;
     }
     switch (cat) {
@@ -389,7 +609,7 @@ static void draw_top(const ui_state *ui)
     case UI_CAT_QUEUE:
         hint(&x, ok, "Play", t->dim);
         hint(&x, ICON_TRIANGLE, "Options", t->dim);
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "SELECT Move") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, ui_tr("SELECT Move")) + 10;
         break;
     case UI_CAT_SEARCH:
         hint(&x, ok, "Play", t->dim);
@@ -400,17 +620,19 @@ static void draw_top(const ui_state *ui)
         hint(&x, ICON_SQUARE, ui->now.paused ? "Play" : "Pause", t->dim);
         hint(&x, ok, "Repeat", t->dim);
         hint(&x, ICON_TRIANGLE, "Shuffle", t->dim);
-        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim, "\xE2\x86\x91\xE2\x86\x93 Vol") + 10;
+        x += font_draw(FONT_REGULAR, 10, x, 3, t->dim,
+                       ui_tr("\xE2\x86\x91\xE2\x86\x93 Vol")) + 10;
         break;
     case UI_CAT_RECENT:
-        hint(&x, ok, lvl == 0 ? "Open" : "Play", t->dim);
-        if (lvl > 0) hint(&x, back, "Back", t->dim);
+        hint(&x, ok, "Play", t->dim);
+        hint(&x, ICON_TRIANGLE, "Options", t->dim);
         break;
     case UI_CAT_SETTINGS:
         hint(&x, ok, lvl == 0 ? "Open" : "Select", t->dim);
         if (lvl > 0) hint(&x, back, "Back", t->dim);
         break;
     case UI_CAT_PLAYLISTS:
+    case UI_CAT_MY_PLAYLISTS:
         hint(&x, ok, lvl == 0 ? "Open" : "Play", t->dim);
         if (lvl > 0) hint(&x, back, "Back", t->dim);
         hint(&x, ICON_TRIANGLE, lvl == 0 ? "Pin" : "Options", t->dim);
@@ -428,12 +650,31 @@ static void draw_top(const ui_state *ui)
         font_draw(FONT_BOLD, 10, right, 3, t->text, ui->clock);
         right -= 8;
     }
-    char volume[8];
-    snprintf(volume, sizeof volume, "%d", ui->volume);
-    right -= font_width(FONT_REGULAR, 10, volume);
-    font_draw(FONT_REGULAR, 10, right, 3, t->dim, volume);
-    right -= 15;
-    font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE, 12, right, 5, t->dim);
+    /* Windows-style inline volume display: icon, bar, percentage.
+     * No pill or background; aligned with the clock in the top bar. */
+    if (ui->volume_popup_left > 0.0f) {
+        const float alpha = clampf(ui->volume_popup_left / 0.3f, 0.0f, 1.0f);
+        char percentage[8];
+        snprintf(percentage, sizeof percentage, "%d%%", ui->volume);
+        const float text_w = font_width(FONT_BOLD, 10, percentage);
+        /* Reserve the widest percentage so the icon and bar never shift. */
+        const float percentage_w = font_width(FONT_BOLD, 10, "100%");
+        const float bar_w = 70.0f;
+        const float gap = 9.0f;
+        const float icon_w = 12.0f;
+        const float volume_x = right - (icon_w + gap + bar_w + gap + percentage_w);
+        const float bar_x = volume_x + icon_w + gap;
+        font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE,
+                  12, volume_x, 5.0f, color_fade(t->dim, alpha));
+        draw_round_rect(bar_x, 10.0f, bar_w, 4.0f, 2.0f,
+                        color_fade(t->dim, alpha * 0.5f));
+        if (ui->volume > 0)
+            draw_round_rect(bar_x, 10.0f, bar_w * (float)ui->volume / 100.0f,
+                            4.0f, 2.0f, color_fade(0xFF1DB954u, alpha));
+        /* Right-align within the fixed slot; 100% fills it completely. */
+        font_draw(FONT_BOLD, 10, bar_x + bar_w + gap + percentage_w - text_w, 3.0f,
+                  color_fade(t->text, alpha), percentage);
+    }
 }
 
 static void draw_categories(const ui_state *ui)
@@ -451,9 +692,9 @@ static void draw_categories(const ui_state *ui)
         font_icon(cat_icons[cat], size, cx - size / 2.0f, bottom - size,
                   color_fade(t->icons, 0.45f + 0.55f * s));
         if (s > 0.01f) {
-            float w = font_width(FONT_BOLD, 11, cat_names[cat]);
+            float w = font_width(FONT_BOLD, 11, ui_tr(cat_names[cat]));
             font_draw(FONT_BOLD, 11, cx - w / 2.0f, CAT_BOTTOM - 15, color_fade(t->text, s),
-                      cat_names[cat]);
+                      ui_tr(cat_names[cat]));
         }
     }
 }
@@ -487,7 +728,7 @@ static void draw_list(const ui_state *ui, const ui_list *list, float scroll, flo
     }
     if (list->count == 0) {
         font_draw(FONT_REGULAR, 12, x, top + 6, color_fade(t->dim, alpha),
-                  list->loading ? "Loading\xE2\x80\xA6" : "Nothing here yet");
+                  ui_tr(list->loading ? "Loading\xE2\x80\xA6" : "Nothing here yet"));
         return;
     }
     const float small_h = st->small + 6, big_h = st->big + 6;
@@ -573,7 +814,8 @@ static void draw_search(const ui_state *ui, float bottom, float alpha, float sli
         font_draw_fit(FONT_REGULAR, 12, x + 32, y + 5, color_fade(t->text, alpha), ui->search_query,
                       w - 110);
         char count[24];
-        if (results->loading) snprintf(count, sizeof count, "Searching\xE2\x80\xA6");
+        if (results->loading) snprintf(count, sizeof count, "%s", ui_tr("Searching…"));
+        else if (ui_language) snprintf(count, sizeof count, "%d sonuç", results->count);
         else snprintf(count, sizeof count, "%d results", results->count);
         float cw = font_width(FONT_REGULAR, 10, count);
         font_draw(FONT_REGULAR, 10, x + w - 12 - cw, y + 7, color_fade(t->dim, alpha), count);
@@ -581,7 +823,7 @@ static void draw_search(const ui_state *ui, float bottom, float alpha, float sli
         draw_levels(ui, UI_CAT_SEARCH, 30 + slide, y + 34, bottom, &st, alpha, 0);
     } else {
         font_draw(FONT_REGULAR, 12, x + 32, y + 5, color_fade(t->dim, alpha),
-                  ui->search_hint ? ui->search_hint : "Press \xE2\x96\xA1 to search Spotify");
+                  ui->search_hint ? ui_tr(ui->search_hint) : ui_tr("Press \xE2\x96\xA1 to search Spotify"));
     }
 }
 
@@ -650,7 +892,7 @@ static void draw_now_centered(const ui_state *ui, float alpha, float slide)
     float tw = fminf(font_width(FONT_XBOLD, 17, n->title), w);
     font_draw_fit(FONT_XBOLD, 17, (SCREEN_W - tw) / 2 + slide, cy + size + 4, color_fade(t->text, alpha),
                   n->title, w);
-    const char *sub = n->loading ? "Loading\xE2\x80\xA6" : n->artist;
+    const char *sub = n->loading ? ui_tr("Loading\xE2\x80\xA6") : n->artist;
     float sw = fminf(font_width(FONT_REGULAR, 12, sub), w);
     font_draw_fit(FONT_REGULAR, 12, (SCREEN_W - sw) / 2 + slide, cy + size + 26,
                   color_fade(color_mix(t->dim, t->text, 0.5f), alpha), sub, w);
@@ -693,9 +935,9 @@ static void draw_now(const ui_state *ui, float alpha, float slide)
     const ui_now *n = &ui->now;
     if (n->active && ui->style.visualizer) draw_visualizer(ui, alpha);
     if (!n->active) {
-        font_draw(FONT_BOLD, 15, 100 + slide, 120, color_fade(t->text, alpha), "Nothing playing");
+        font_draw(FONT_BOLD, 15, 100 + slide, 120, color_fade(t->text, alpha), ui_tr("Nothing playing"));
         font_draw(FONT_REGULAR, 12, 100 + slide, 142, color_fade(t->dim, alpha),
-                  "Pick a song in Liked Songs, Playlists or Search.");
+                  ui_tr("Pick a song in Liked Songs, Playlists or Search."));
         return;
     }
     if (ui->style.now_layout == UI_NOW_CENTERED) {
@@ -715,7 +957,7 @@ static void draw_now(const ui_state *ui, float alpha, float slide)
                   n->artist, w);
     y += font_line_height(FONT_REGULAR, artist);
     font_draw_fit(FONT_REGULAR, album, x, y, color_fade(t->dim, alpha),
-                  n->loading ? "Loading\xE2\x80\xA6" : n->album, w);
+                  n->loading ? ui_tr("Loading\xE2\x80\xA6") : n->album, w);
 
     draw_seek_bar(ui, x, 200, w, alpha);
     const float end = draw_controls(ui, x, 241, alpha);

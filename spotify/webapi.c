@@ -680,72 +680,149 @@ static void parse_playlist_picture(const uint8_t *attrs, size_t len, spotify_pla
     }
 }
 
-static int sp_playlists_unlocked(const char *client_token, const char *access_token,
-                                 const char *username, spotify_playlist *out, int max)
+/* Only keep the first max general playlists and the alphabetically first
+ * owned_max playlists. Scanning multiple rootlist pages prevents users with
+ * many followed playlists from seeing just a handful of their own. */
+static int playlist_name_cmp(const char *a, const char *b)
 {
-    static char url[256];
-    if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/user/%s/rootlist"
-             "?decorate=revision,attributes,length,owner,capabilities,status_code"
-             "&from=0&length=%d", username, max * 2);
-    size_t len = 0;
-    int status = sp_get(url, &len);
-    if (status != 200) return status < 0 ? status : -status;
-
-    /* SelectedListContent.contents(5) = ListItems { items(3) Item{uri=1},
-     * meta_items(4) MetaItem{attributes(2){name=1}, length(3)} }, the
-     * meta items parallel to the items. */
-    const uint8_t *contents;
-    size_t contents_len;
-    if (pb_find_bytes(resp_buf, len, 5, &contents, &contents_len) < 0) return 0;
-
-    static const uint8_t *uris[512];
-    static size_t uri_lens[512];
-    static const uint8_t *metas[512];
-    static size_t meta_lens[512];
-    int n_items = 0, n_metas = 0;
-    pb_reader r;
-    pb_field f;
-    pb_init(&r, contents, contents_len);
-    while (pb_next(&r, &f) == 1) {
-        if (f.field == 3 && f.wire == 2 && n_items < 512) {
-            const uint8_t *uri;
-            size_t uri_len;
-            if (pb_find_bytes(f.data, f.len, 1, &uri, &uri_len) < 0) { uri = f.data; uri_len = 0; }
-            uris[n_items] = uri;
-            uri_lens[n_items++] = uri_len;
-        } else if (f.field == 4 && f.wire == 2 && n_metas < 512) {
-            metas[n_metas] = f.data;
-            meta_lens[n_metas++] = f.len;
-        }
+    for (;;) {
+        unsigned ca = (unsigned char)*a++, cb = (unsigned char)*b++;
+        if (ca >= 'A' && ca <= 'Z') ca += 'a' - 'A';
+        if (cb >= 'A' && cb <= 'Z') cb += 'a' - 'A';
+        if (ca != cb || !ca) return ca < cb ? -1 : ca > cb ? 1 : 0;
     }
-    int aligned = n_metas == n_items;
-    int count = 0, with_image = 0;
-    for (int i = 0; i < n_items && count < max; ++i) {
-        if (uri_lens[i] != 39 || memcmp(uris[i], "spotify:playlist:", 17) != 0)
-            continue;                                  /* folder markers etc. */
-        spotify_playlist *p = &out[count++];
-        copy_str(p->id, sizeof p->id, uris[i] + 17, 22);
-        snprintf(p->name, sizeof p->name, "Playlist %.8s", p->id);
-        p->total = -1;
-        p->image[0] = '\0';
-        if (!aligned) continue;
-        pb_init(&r, metas[i], meta_lens[i]);
-        while (pb_next(&r, &f) == 1) {
-            if (f.field == 2 && f.wire == 2) {
-                const uint8_t *name;
-                size_t name_len;
-                if (pb_find_bytes(f.data, f.len, 1, &name, &name_len) == 0)
-                    copy_str(p->name, sizeof p->name, name, name_len);
-                parse_playlist_picture(f.data, f.len, p);
-                with_image += p->image[0] != '\0';
-            } else if (f.field == 3 && f.wire == 0) {
-                p->total = (int)f.varint;
+}
+
+static void owned_playlist_insert(spotify_playlist *owned, int *count, int max,
+                                  const spotify_playlist *p)
+{
+    if (!owned || !count || max <= 0) return;
+    for (int k = 0; k < *count; ++k)
+        if (!strcmp(owned[k].id, p->id)) return;
+    int at = 0;
+    while (at < *count) {
+        int cmp = playlist_name_cmp(owned[at].name, p->name);
+        if (cmp > 0 || (cmp == 0 && strcmp(owned[at].id, p->id) > 0)) break;
+        ++at;
+    }
+    if (at >= max) return;
+    int n = *count < max ? *count : max - 1;
+    if (n > at)
+        memmove(&owned[at + 1], &owned[at], sizeof owned[0] * (size_t)(n - at));
+    owned[at] = *p;
+    if (*count < max) ++*count;
+}
+
+static int sp_playlists_unlocked(const char *client_token, const char *access_token,
+                                 const char *username, spotify_playlist *out, int max,
+                                 spotify_playlist *owned, int owned_max, int *owned_count)
+{
+    /* At most 10 requests of 200 rootlist items. Normal display and My
+     * Playlists each use 100 slots, irrespective of the total scanned. */
+    enum { ROOT_PAGE = 200, ROOT_SCAN_LIMIT = 2000 };
+    static char url[256];
+    static const uint8_t *uris[ROOT_PAGE];
+    static size_t uri_lens[ROOT_PAGE];
+    static const uint8_t *metas[ROOT_PAGE];
+    static size_t meta_lens[ROOT_PAGE];
+    int count = 0, own_count = 0, pages = 0, scanned = 0, missing_meta = 0;
+    if (owned_count) *owned_count = 0;
+    if (!out || max <= 0 || !owned || owned_max <= 0 || !owned_count) return -1;
+    if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
+    for (int offset = 0; offset < ROOT_SCAN_LIMIT; ) {
+        int q = snprintf(url, sizeof url, SPCLIENT "/playlist/v2/user/%s/rootlist"
+                         "?decorate=revision,attributes,length,owner,capabilities,status_code"
+                         "&from=%d&length=%d", username, offset, ROOT_PAGE);
+        if (q <= 0 || (size_t)q >= sizeof url) break;
+        size_t len = 0;
+        int status = sp_get(url, &len);
+        if (status != 200) {
+            log_printf("LIBRARY: rootlist page %d HTTP %d\n", offset, status);
+            if (!pages) return status < 0 ? status : -status;
+            break;  /* retain successfully loaded pages */
+        }
+
+        /* SelectedListContent.contents(5) = ListItems {
+         * items(3) Item{uri=1}, meta_items(4) MetaItem {
+         * attributes(2), length(3), owner_username(5) } }.
+         * MetaItem fields are parallel to the rootlist items. */
+        const uint8_t *contents = NULL;
+        size_t contents_len = 0;
+        if (pb_find_bytes(resp_buf, len, 5, &contents, &contents_len) < 0) break;
+        /* Some servers return fewer than requested even though further
+         * pages exist. Use rootlist total length and the truncated bit,
+         * rather than only comparing n_items with ROOT_PAGE. */
+        int total_in_root = -1, truncated = 0;
+        pb_reader r;
+        pb_field field;
+        pb_init(&r, resp_buf, len);
+        while (pb_next(&r, &field) == 1)
+            if (field.field == 2 && field.wire == 0) {
+                total_in_root = (int)field.varint;
+                break;
+            }
+        int n_items = 0, n_metas = 0;
+        pb_init(&r, contents, contents_len);
+        while (pb_next(&r, &field) == 1) {
+            if (field.field == 2 && field.wire == 0) {
+                truncated = field.varint != 0;
+            } else if (field.field == 3 && field.wire == 2 && n_items < ROOT_PAGE) {
+                const uint8_t *uri;
+                size_t uri_len;
+                if (pb_find_bytes(field.data, field.len, 1, &uri, &uri_len) < 0) {
+                    uri = NULL; uri_len = 0;
+                }
+                uris[n_items] = uri;
+                uri_lens[n_items++] = uri_len;
+            } else if (field.field == 4 && field.wire == 2 && n_metas < ROOT_PAGE) {
+                metas[n_metas] = field.data;
+                meta_lens[n_metas++] = field.len;
             }
         }
+        if (n_items == 0) break;
+        const int aligned = n_items == n_metas;
+        if (!aligned) missing_meta += n_items;
+        for (int i = 0; i < n_items; ++i) {
+            if (uri_lens[i] != 39 || !uris[i] ||
+                memcmp(uris[i], "spotify:playlist:", 17) != 0)
+                continue;
+            spotify_playlist item;
+            memset(&item, 0, sizeof item);
+            copy_str(item.id, sizeof item.id, uris[i] + 17, 22);
+            snprintf(item.name, sizeof item.name, "Playlist %.8s", item.id);
+            item.total = -1;
+            if (aligned) {
+                pb_init(&r, metas[i], meta_lens[i]);
+                while (pb_next(&r, &field) == 1) {
+                    if (field.field == 2 && field.wire == 2) {
+                        const uint8_t *name;
+                        size_t name_len;
+                        if (pb_find_bytes(field.data, field.len, 1, &name, &name_len) == 0)
+                            copy_str(item.name, sizeof item.name, name, name_len);
+                        parse_playlist_picture(field.data, field.len, &item);
+                    } else if (field.field == 3 && field.wire == 0) {
+                        item.total = (int)field.varint;
+                    } else if (field.field == 5 && field.wire == 2) {
+                        copy_str(item.owner, sizeof item.owner, field.data, field.len);
+                    }
+                }
+            }
+            if (count < max) out[count++] = item;
+            if (item.owner[0] && strcmp(item.owner, username) == 0)
+                owned_playlist_insert(owned, &own_count, owned_max, &item);
+        }
+        scanned += n_items;
+        ++pages;
+        offset += n_items;
+        if (total_in_root >= 0) {
+            if (offset >= total_in_root) break;
+        } else if (!truncated && n_items < ROOT_PAGE) {
+            break;
+        }
     }
-    log_printf("LIBRARY: %d playlists (%d items, %d meta, %d with a cover)\n", count, n_items,
-               n_metas, with_image);
+    *owned_count = own_count;
+    log_printf("LIBRARY: rootlist %d entries in %d pages, %d general, %d owned (meta gaps %d)\n",
+               scanned, pages, count, own_count, missing_meta);
     return count;
 }
 
@@ -785,16 +862,21 @@ static int sp_liked_unlocked(const char *client_token, const char *access_token,
                 const uint8_t *uri = NULL;
                 size_t uri_len = 0;
                 int removed = 0;
+                uint64_t added_at = 0;
                 pb_reader ir;
                 pb_field iff;
                 pb_init(&ir, f.data, f.len);
                 while (pb_next(&ir, &iff) == 1) {
                     if (iff.field == 1 && iff.wire == 2) { uri = iff.data; uri_len = iff.len; }
+                    if (iff.field == 2 && iff.wire == 0) added_at = iff.varint;
                     if (iff.field == 3 && iff.wire == 0) removed = (int)iff.varint;
                 }
                 if (uri && !removed && count < max &&
-                    track_uri_to_id(uri, uri_len, out[count].id) == 0)
+                    track_uri_to_id(uri, uri_len, out[count].id) == 0) {
+                    out[count].added_at = added_at;
+                    out[count].source_index = count;
                     ++count;
+                }
             } else if (f.field == 2 && f.wire == 2) {
                 copy_str(token, sizeof token, f.data, f.len);
             }
@@ -811,9 +893,15 @@ static int sp_tracks_unlocked(const char *client_token, const char *access_token
     if (!playlist_id[0]) return sp_liked_unlocked(client_token, access_token, username, out, max);
     static char url[160];
     if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s", playlist_id);
+    /* Include item attributes so playlist entries carry their add timestamps. */
+    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s?decorate=attributes", playlist_id);
     size_t len = 0;
     int status = sp_get(url, &len);
+    if (status != 200) {
+        /* Fall back to the original request if decoration is unsupported. */
+        snprintf(url, sizeof url, SPCLIENT "/playlist/v2/playlist/%s", playlist_id);
+        status = sp_get(url, &len);
+    }
     if (status != 200) return status < 0 ? status : -status;
     const uint8_t *contents;
     size_t contents_len;
@@ -827,9 +915,28 @@ static int sp_tracks_unlocked(const char *client_token, const char *access_token
         const uint8_t *uri;
         size_t uri_len;
         if (pb_find_bytes(f.data, f.len, 1, &uri, &uri_len) == 0 &&
-            track_uri_to_id(uri, uri_len, out[count].id) == 0)
+            track_uri_to_id(uri, uri_len, out[count].id) == 0) {
+            /* playlist4 Item.attributes(2).timestamp(2) is the add time. */
+            const uint8_t *attrs;
+            size_t attrs_len;
+            pb_reader ar;
+            pb_field af;
+            if (pb_find_bytes(f.data, f.len, 2, &attrs, &attrs_len) == 0) {
+                pb_init(&ar, attrs, attrs_len);
+                while (pb_next(&ar, &af) == 1) {
+                    if (af.field == 2 && af.wire == 0) {
+                        out[count].added_at = af.varint;
+                        break;
+                    }
+                }
+            }
+            out[count].source_index = count;
             ++count;
+        }
     }
+    int dated = 0;
+    for (int i = 0; i < count; ++i) if (out[i].added_at) ++dated;
+    log_printf("PLAYLIST: %d tracks, %d add timestamps available\n", count, dated);
     return count;
 }
 
@@ -981,10 +1088,12 @@ static void lock(void) { sceKernelWaitSema(api_lock, 1, NULL); }
 static void unlock(void) { sceKernelSignalSema(api_lock, 1); }
 
 int spotify_sp_playlists(const char *client_token, const char *access_token,
-                         const char *username, spotify_playlist *out, int max)
+                         const char *username, spotify_playlist *out, int max,
+                         spotify_playlist *owned, int owned_max, int *owned_count)
 {
     lock();
-    int r = sp_playlists_unlocked(client_token, access_token, username, out, max);
+    int r = sp_playlists_unlocked(client_token, access_token, username,
+                                  out, max, owned, owned_max, owned_count);
     unlock();
     return r;
 }
@@ -1104,47 +1213,39 @@ static int sp_search_unlocked(const char *client_token, const char *access_token
     return count;
 }
 
-static int sp_recent_unlocked(const char *client_token, const char *access_token,
-                              const char *username, spotify_context *out, int max)
+/* Spotify's internal recently-played response contains song URIs when the
+ * 'track' filter is requested. Collect those URI occurrences in response
+ * order, not playback contexts (albums, artists or playlists). Like Search,
+ * the lightweight scanner ignores non-track URIs and duplicates.
+ *
+ * This spclient endpoint is undocumented. Log the number found so a schema
+ * change is visible in spotify.log instead of silently showing contexts. */
+static int sp_recent_tracks_unlocked(const char *client_token, const char *access_token,
+                                     const char *username, spotify_track *out, int max)
 {
     static char url[256];
     if (sp_headers(client_token, access_token, "application/json") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/recently-played/v3/user/%s/recently-played"
-             "?format=json&offset=0&limit=50&filter=default", username);
+    int n = snprintf(url, sizeof url,
+                     SPCLIENT "/recently-played/v3/user/%s/recently-played"
+                     "?format=json&offset=0&limit=50&filter=default,track", username);
+    if (n <= 0 || (size_t)n >= sizeof url) return -1;
     size_t len = 0;
     int status = sp_get(url, &len);
-    if (status != 200) return status < 0 ? status : -status;
-    /* Every context appears as "uri":"spotify:<kind>:..." in the reply. */
-    static const char *const kinds[] = { "spotify:playlist:", "spotify:album:", "spotify:artist:",
-                                         "spotify:user:" };
-    int count = 0;
-    for (size_t i = 0; i + 16 < len && count < max; ++i) {
-        if (memcmp(resp_buf + i, "\"spotify:", 9) != 0) continue;
-        const char *start = (const char *)resp_buf + i + 1;
-        const char *end = memchr(start, '"', len - i - 1);
-        if (!end || end - start >= (long)sizeof out[0].uri) continue;
-        size_t n = (size_t)(end - start);
-        int known = 0;
-        for (size_t k = 0; k < sizeof kinds / sizeof kinds[0]; ++k)
-            known |= strncmp(start, kinds[k], strlen(kinds[k])) == 0;
-        /* spotify:user:<name>:collection is Liked Songs; other user URIs
-         * (profiles) are not playable contexts. */
-        if (known && strncmp(start, "spotify:user:", 13) == 0 &&
-            (n < 11 || memcmp(end - 11, ":collection", 11) != 0))
-            known = 0;
-        if (!known) continue;
-        int seen = 0;
-        for (int k = 0; k < count && !seen; ++k)
-            seen = strlen(out[k].uri) == n && memcmp(out[k].uri, start, n) == 0;
-        if (!seen) {
-            memcpy(out[count].uri, start, n);
-            out[count].uri[n] = '\0';
-            out[count].name[0] = '\0';
-            ++count;
-        }
-        i += n;
+    int count = status == 200 ? scan_track_ids(len, out, max) : 0;
+    /* A desktop client's undocumented history feed may omit raw track URIs.
+     * Try the standard history endpoint with our existing OAuth token. The
+     * shared client can receive HTTP 429; failure must not invent songs. */
+    if (!count) {
+        const int primary_status = status;
+        status = sp_get("https://api.spotify.com/v1/me/player/recently-played?limit=50", &len);
+        if (status == 200) count = scan_track_ids(len, out, max);
+        log_printf("RECENT: standard history fallback HTTP %d (%d tracks)\n",
+                   status, count);
+        if (!count && primary_status != 200)
+            return primary_status < 0 ? primary_status : -primary_status;
     }
-    log_printf("RECENT: %d contexts (%u bytes)\n", count, (unsigned int)len);
+    for (int i = 0; i < count; ++i) out[i].source_index = i;
+    log_printf("RECENT: %d recently played tracks\n", count);
     return count;
 }
 
@@ -1224,11 +1325,11 @@ int spotify_sp_like(const char *client_token, const char *access_token, const ch
     return status;
 }
 
-int spotify_sp_recent(const char *client_token, const char *access_token,
-                      const char *username, spotify_context *out, int max)
+int spotify_sp_recent_tracks(const char *client_token, const char *access_token,
+                            const char *username, spotify_track *out, int max)
 {
     lock();
-    int r = sp_recent_unlocked(client_token, access_token, username, out, max);
+    int r = sp_recent_tracks_unlocked(client_token, access_token, username, out, max);
     unlock();
     return r;
 }

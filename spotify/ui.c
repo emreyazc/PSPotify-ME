@@ -43,6 +43,9 @@ extern const unsigned int ui_font_regular_len, ui_font_bold_len, ui_font_xbold_l
 
 #define MAX_PLAYLISTS 100
 #define MAX_TRACKS 500
+/* First stage: page the visible rows; metadata streaming follows separately. */
+static int songs_page_size(void) { return (prefs[PREF_SONGS_PER_LOAD] + 1) * 25; }
+static int visible_tracks(int total, int limit) { return total < limit ? total : limit; }
 #define MAX_THEMES 16
 #define COVER 128
 
@@ -54,9 +57,12 @@ static ui_state xmb;
 /* ------------------------------------------------------------ library */
 
 /* playlists[0] is unused (Liked Songs has its own category). */
-static spotify_playlist playlists[MAX_PLAYLISTS + 1];
+/* First 100 general playlists; second 100 are the separately scanned
+ * personal playlists. Extra entries never enter the general category. */
+static spotify_playlist playlists[MAX_PLAYLISTS * 2 + 1];
 static int playlist_count;
-static ui_row playlist_rows[MAX_PLAYLISTS];
+static ui_row playlist_rows[MAX_PLAYLISTS], my_playlist_rows[MAX_PLAYLISTS];
+static int my_playlist_view[MAX_PLAYLISTS], my_playlist_count;
 
 /* Lists load on the loader thread so the interface keeps moving. The UI
  * thread only reads a buffer after the loader marked it done. */
@@ -67,21 +73,27 @@ static ui_row liked_rows[MAX_TRACKS], opened_rows[MAX_TRACKS];
  * liked_ready counts the songs with names, liked_shown those turned into
  * rows. */
 static volatile int liked_done, liked_count, liked_ready, liked_ids_loaded;
+static void sort_tracks(spotify_track *tracks, int count);
 static int liked_shown;
+static int liked_visible_limit;
+static volatile int liked_load_target;
+static int opened_visible_limit;
+static int liked_sort_applied;    /* final sort after the loader finishes metadata */
+static int liked_reorder_pending;
+static volatile int liked_reload_requested;
 static volatile unsigned open_req_seq, open_done_seq, open_shown_seq;
 static volatile int open_req_playlist, open_done_playlist, open_done_count;
+static volatile int open_total_count, open_load_target;
+static int open_fetched_count;
+static int open_source_cat = UI_CAT_PLAYLISTS;
 
-/* Recently played contexts, loaded the first time Recent is shown, and the
- * songs of the one opened. */
-#define MAX_RECENT 30
-#define MAX_CONTEXT_TRACKS 200
-static spotify_context recent[MAX_RECENT];
+/* Recently played tracks, most recently heard first. There is no second
+ * level or playlist/album context inside Recent. */
+#define MAX_RECENT 50
+static spotify_track recent_tracks[MAX_RECENT];
 static ui_row recent_rows[MAX_RECENT];
-static volatile int recent_requested, recent_done, recent_count, recent_shown;
-static spotify_track ctx_tracks[MAX_CONTEXT_TRACKS];
-static ui_row ctx_rows[MAX_CONTEXT_TRACKS];
-static volatile unsigned ctx_req_seq, ctx_done_seq, ctx_shown_seq;
-static volatile int ctx_req_index, ctx_done_count;
+static volatile unsigned recent_req_seq, recent_done_seq, recent_shown_seq;
+static volatile int recent_count, recent_error;
 
 /* Search results, loaded the same way. */
 #define MAX_RESULTS 50
@@ -219,19 +231,21 @@ static int prebake_pending = 1;
 
 /* Categories: all of them in the user's order, and which are hidden. */
 static const char *const cat_tokens[UI_CATS] = {
-    "search", "recent", "liked", "playlists", "now", "queue", "settings"
+    "search", "recent", "liked", "playlists", "now", "queue", "settings", "my_playlists"
 };
 static const char *const cat_titles[UI_CATS] = {
-    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings"
+    "Search", "Recent", "Liked Songs", "Playlists", "Now Playing", "Queue", "Settings",
+    "My Playlists"
 };
 static const unsigned cat_icon[UI_CATS] = {
-    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS
+    ICON_SEARCH, ICON_HISTORY, ICON_HEART, ICON_LIST_MUSIC, ICON_MUSIC, ICON_QUEUE, ICON_SLIDERS,
+    ICON_USER
 };
-static int cat_all[UI_CATS] = { 0, 1, 2, 3, 4, 5, 6 };
+static int cat_all[UI_CATS] = { 0, 1, 2, 3, UI_CAT_MY_PLAYLISTS, 4, 5, 6 };
 static unsigned char cat_hidden[UI_CATS];
 /* PREF_START values, in order. */
 static const int start_categories[] = {
-    UI_CAT_PLAYLISTS, UI_CAT_LIKED, UI_CAT_SEARCH, UI_CAT_RECENT, UI_CAT_NOW
+    UI_CAT_PLAYLISTS, UI_CAT_LIKED, UI_CAT_SEARCH, UI_CAT_RECENT, UI_CAT_NOW, UI_CAT_MY_PLAYLISTS
 };
 
 /* Playlists pinned to the top, by id; and the order they are listed in. */
@@ -239,6 +253,8 @@ static const int start_categories[] = {
 static char pinned[MAX_PINS][24];
 static int pinned_count;
 static int playlist_view[MAX_PLAYLISTS];    /* row -> playlists[] index */
+static int playlist_cat(int cat) { return cat == UI_CAT_PLAYLISTS || cat == UI_CAT_MY_PLAYLISTS; }
+static ui_list *opened_list(void) { return &xmb.lists[open_source_cat][1]; }
 static void arrange_playlists(void);
 static void site_finished(void);
 static int site_request(int job, int arg);
@@ -581,22 +597,25 @@ static void fill_groups(void)
             continue;
         ui_row *r = &group_rows[group_count];
         memset(r, 0, sizeof *r);
-        copy_text(r->title, sizeof r->title, group_info[g].title);
+        copy_text(r->title, sizeof r->title, ui_tr(group_info[g].title));
         if (g == PREF_GROUP_THEMES && theme_active >= 0)
-            snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 %d installed",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s · %d yüklü" : "%s · %d installed",
                      theme_names[theme_active], theme_count);
         else if (g == PREF_GROUP_ABOUT && update_state == UPDATE_AVAILABLE)
-            snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out", update_info.version);
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s sürümü yayınlandı" : "Version %s is out",
+                     update_info.version);
         else
-            copy_text(r->subtitle, sizeof r->subtitle, group_info[g].subtitle);
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(group_info[g].subtitle));
         r->icon = group_info[g].icon;
         r->color = group_info[g].color;
         group_view[group_count++] = g;
     }
     ui_row *quit = &group_rows[group_count];
     memset(quit, 0, sizeof *quit);
-    copy_text(quit->title, sizeof quit->title, "Quit");
-    copy_text(quit->subtitle, sizeof quit->subtitle, "Back to the PSP menu (START does it too)");
+    copy_text(quit->title, sizeof quit->title, ui_tr("Quit"));
+    copy_text(quit->subtitle, sizeof quit->subtitle, ui_tr("Back to the PSP menu (START does it too)"));
     quit->icon = ICON_POWER;
     quit->color = 0xFF475569u;
     group_view[group_count++] = GROUP_QUIT;
@@ -617,7 +636,7 @@ static void fill_options(void)
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
             copy_text(r->title, sizeof r->title, theme_names[k]);
-            snprintf(r->subtitle, sizeof r->subtitle, "%s%s", k == theme_active ? "Active" : "Theme",
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s", ui_tr(k == theme_active ? "Active" : "Theme"),
                      theme_wallpaper[k] ? " \xC2\xB7 has a wallpaper" : "");
             r->icon = ICON_PALETTE;
             r->color = theme_swatch[k];
@@ -628,8 +647,8 @@ static void fill_options(void)
         if (gallery_count == -2) {
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, "Couldn't reach the theme site");
-            copy_text(r->subtitle, sizeof r->subtitle, "Check the Wi-Fi \xC2\xB7 select to try again");
+            copy_text(r->title, sizeof r->title, ui_tr("Couldn't reach the theme site"));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Check the Wi-Fi \xC2\xB7 select to try again"));
             r->icon = ICON_IMAGES;
             r->color = 0xFF3A3F4Au;
             option_view[n++] = -1;
@@ -642,9 +661,9 @@ static void fill_options(void)
             for (int k = 0; k < theme_count; ++k) installed |= !strcmp(theme_names[k], gallery[i].folder);
             copy_text(r->title, sizeof r->title, gallery[i].folder);
             snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
-                     busy && site_arg == i ? "Downloading\xE2\x80\xA6"
-                     : installed ? "Installed \xC2\xB7 select to download again" : "Select to download",
-                     gallery[i].has_wallpaper ? " \xC2\xB7 wallpaper" : "");
+                     ui_tr(busy && site_arg == i ? "Downloading\xE2\x80\xA6"
+                     : installed ? "Installed \xC2\xB7 select to download again" : "Select to download"),
+                     gallery[i].has_wallpaper ? (prefs[PREF_LANGUAGE] ? " · duvar kâğıdı" : " · wallpaper") : "");
             r->icon = installed ? ICON_PALETTE : ICON_DOWNLOAD;
             r->color = gallery[i].accent;
             r->playing = installed;
@@ -655,27 +674,32 @@ static void fill_options(void)
         memset(r, 0, sizeof *r);
         snprintf(r->title, sizeof r->title, "PSPotify ME %s", PSPOTIFY_VERSION);
         switch (update_state) {
-        case UPDATE_CHECKING: copy_text(r->subtitle, sizeof r->subtitle, "Checking for updates\xE2\x80\xA6"); break;
-        case UPDATE_CURRENT: copy_text(r->subtitle, sizeof r->subtitle, "Up to date"); break;
+        case UPDATE_CHECKING: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Checking for updates\xE2\x80\xA6")); break;
+        case UPDATE_CURRENT: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Up to date")); break;
         case UPDATE_AVAILABLE:
-            snprintf(r->subtitle, sizeof r->subtitle, "Version %s is out \xC2\xB7 select to install",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s sürümü hazır · yüklemek için seç"
+                                          : "Version %s is out · select to install",
                      update_info.version);
             break;
         case UPDATE_FAILED:
-            copy_text(r->subtitle, sizeof r->subtitle, "Couldn't check \xC2\xB7 select to try again");
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Couldn't check · select to try again"));
             break;
         case UPDATE_INSTALLING:
-            snprintf(r->subtitle, sizeof r->subtitle, "Downloading %s\xE2\x80\xA6 %d%%",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s indiriliyor… %d%%" : "Downloading %s… %d%%",
                      update_info.version, update_progress);
             break;
         case UPDATE_INSTALLED:
-            snprintf(r->subtitle, sizeof r->subtitle, "%s installed \xC2\xB7 select to quit, then start it again",
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%s yüklendi · çıkıp yeniden başlat"
+                                          : "%s installed · select to quit, then start it again",
                      update_info.version);
             break;
         case UPDATE_INSTALL_FAILED:
-            copy_text(r->subtitle, sizeof r->subtitle, "Update failed, nothing changed \xC2\xB7 select to try again");
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Update failed, nothing changed · select to try again"));
             break;
-        default: copy_text(r->subtitle, sizeof r->subtitle, "Select to check for updates"); break;
+        default: copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Select to check for updates")); break;
         }
         r->icon = update_state == UPDATE_AVAILABLE ? ICON_DOWNLOAD
                 : update_state == UPDATE_INSTALLED ? ICON_POWER : ICON_INFO;
@@ -683,8 +707,8 @@ static void fill_options(void)
         option_view[n++] = 0;
         r = &option_rows[n];
         memset(r, 0, sizeof *r);
-        copy_text(r->title, sizeof r->title, pref_info(PREF_CHECK_UPDATES)->label);
-        copy_text(r->subtitle, sizeof r->subtitle, pref_value_name(PREF_CHECK_UPDATES));
+        copy_text(r->title, sizeof r->title, ui_tr(pref_info(PREF_CHECK_UPDATES)->label));
+        copy_text(r->subtitle, sizeof r->subtitle, ui_tr(pref_value_name(PREF_CHECK_UPDATES)));
         r->icon = ICON_INFO;
         r->color = prefs[PREF_CHECK_UPDATES] ? xmb.theme_target.accent : 0xFF3A3F4Au;
         option_view[n++] = 1;
@@ -693,9 +717,9 @@ static void fill_options(void)
             const int c = cat_all[i];
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, cat_titles[c]);
-            copy_text(r->subtitle, sizeof r->subtitle, c == UI_CAT_SETTINGS ? "Always shown"
-                      : cat_hidden[c] ? "Hidden" : "Shown");
+            copy_text(r->title, sizeof r->title, ui_tr(cat_titles[c]));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(c == UI_CAT_SETTINGS ? "Always shown"
+                      : cat_hidden[c] ? "Hidden" : "Shown"));
             r->icon = cat_icon[c];
             r->color = cat_hidden[c] && c != UI_CAT_SETTINGS ? 0xFF3A3F4Au : xmb.theme_target.accent;
             option_view[n++] = c;
@@ -706,25 +730,28 @@ static void fill_options(void)
             if (d->group != g) continue;
             ui_row *r = &option_rows[n];
             memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, d->label);
-            copy_text(r->subtitle, sizeof r->subtitle, pref_value_name((pref_id)i));
+            copy_text(r->title, sizeof r->title, ui_tr(d->label));
+            copy_text(r->subtitle, sizeof r->subtitle, ui_tr(pref_value_name((pref_id)i)));
             if (i == PREF_BACKGROUND && prefs[i] == BACKGROUND_WALLPAPER && !base_theme.wallpaper[0])
-                copy_text(r->subtitle, sizeof r->subtitle, "Theme wallpaper (this theme has none)");
+                copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Theme wallpaper (this theme has none)"));
             if (i == PREF_SLEEP && prefs[i] && sleep_deadline) {
                 const SceUInt64 now = sceKernelGetSystemTimeWide();
                 const unsigned left = sleep_deadline > now
                     ? (unsigned)((sleep_deadline - now) / 60000000u) + 1u : 0u;
-                snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 %s in %u min",
-                         pref_value_name((pref_id)i),
-                         prefs[PREF_SLEEP_ACTION] == SLEEP_POWER_OFF ? "turns off" : "pauses", left);
+                snprintf(r->subtitle, sizeof r->subtitle, prefs[PREF_LANGUAGE]
+                         ? "%s · %s: %u dk" : "%s · %s in %u min",
+                         ui_tr(pref_value_name((pref_id)i)),
+                         prefs[PREF_SLEEP_ACTION] == SLEEP_POWER_OFF
+                             ? ui_tr("Turn off the PSP") : ui_tr("Pause"), left);
             }
             if (i >= PREF_EQ_60 && i <= PREF_EQ_14K && prefs[PREF_EQUALIZER] != PLAYER_EQ_CUSTOM)
-                snprintf(r->subtitle, sizeof r->subtitle, "%s \xC2\xB7 used by Custom",
+                snprintf(r->subtitle, sizeof r->subtitle,
+                         prefs[PREF_LANGUAGE] ? "%s · Özel ekolayzır" : "%s · used by Custom",
                          pref_value_name((pref_id)i));
             option_view[n++] = i;
         }
     }
-    copy_text(l->header, sizeof l->header, group_info[g].title);
+    copy_text(l->header, sizeof l->header, ui_tr(group_info[g].title));
     l->rows = option_rows;
     l->count = n;
     const int own_list = g == PREF_GROUP_THEMES || g == PREF_GROUP_CATEGORIES ||
@@ -790,7 +817,22 @@ static void read_categories(const char *value)
     }
     /* Categories the file does not name (new ones) go at the end. */
     for (int c = 0; c < UI_CATS; ++c)
-        if (!used[c]) seq[n++] = c;
+        if (!used[c]) {
+            if (c == UI_CAT_MY_PLAYLISTS) {
+                /* Existing settings.ini lacks the new category. Place it
+                 * beside Playlists instead of after Settings. */
+                int pos = -1;
+                for (int k = 0; k < n; ++k)
+                    if (seq[k] == UI_CAT_PLAYLISTS) { pos = k + 1; break; }
+                if (pos >= 0) {
+                    memmove(seq + pos + 1, seq + pos, sizeof seq[0] * (size_t)(n - pos));
+                    seq[pos] = c;
+                    ++n;
+                    continue;
+                }
+            }
+            seq[n++] = c;
+        }
     memcpy(cat_all, seq, sizeof cat_all);
     memcpy(cat_hidden, hidden, sizeof cat_hidden);
     cat_hidden[UI_CAT_SETTINGS] = 0;
@@ -827,6 +869,10 @@ static void load_settings(void)
         fclose(f);
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
+    ui_set_language(prefs[PREF_LANGUAGE]);
+    liked_visible_limit = opened_visible_limit = songs_page_size();
+    liked_load_target = liked_visible_limit;
+    open_load_target = opened_visible_limit;
     log_printf("UI: settings read\n");
     apply_equalizer();
     apply_style();
@@ -853,78 +899,38 @@ static void fill_details(spotify_track *out, int n)
     }
 }
 
-static int load_list_max(const char *playlist_id, spotify_track *out, int max)
+/* Fetch IDs and timestamps first, then fetch only the first visible page's
+ * names/covers. Title/artist sorting needs all names to establish the order,
+ * so those modes eagerly fetch metadata but still reveal rows in pages. */
+static int load_list_max(const char *playlist_id, spotify_track *out, int max, int *fetched)
 {
     memset(out, 0, sizeof(spotify_track) * (size_t)max);
     int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username,
                               playlist_id, out, max);
     if (n < 0) n = 0;
-    fill_details(out, n);
+    const int names_required = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                               prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST;
+    if (!names_required) sort_tracks(out, n);
+    *fetched = names_required ? n : visible_tracks(n, songs_page_size());
+    fill_details(out, *fetched);
+    if (names_required) sort_tracks(out, n);
     return n;
-}
-
-static int is_collection(const char *uri)
-{
-    size_t n = strlen(uri);
-    return n > 11 && strcmp(uri + n - 11, ":collection") == 0;
-}
-
-static const spotify_playlist *known_playlist(const char *uri)
-{
-    if (strncmp(uri, "spotify:playlist:", 17) != 0) return NULL;
-    for (int i = 1; i <= playlist_count; ++i)
-        if (!strcmp(playlists[i].id, uri + 17)) return &playlists[i];
-    return NULL;
 }
 
 static void load_recent(void)
 {
-    int n = spotify_sp_recent(ctx.client_token, ctx.access_token, ctx.cfg.username, recent,
-                              MAX_RECENT);
+    memset(recent_tracks, 0, sizeof recent_tracks);
+    int n = spotify_sp_recent_tracks(ctx.client_token, ctx.access_token,
+                                    ctx.cfg.username, recent_tracks, MAX_RECENT);
+    recent_error = n < 0;
     if (n < 0) n = 0;
-    for (int i = 0; i < n && !player_quit; ++i) {
-        const spotify_playlist *p = known_playlist(recent[i].uri);
-        if (is_collection(recent[i].uri))
-            copy_text(recent[i].name, sizeof recent[i].name, "Liked Songs");
-        else if (p)
-            copy_text(recent[i].name, sizeof recent[i].name, p->name);
-        else
-            spotify_sp_context(ctx.client_token, ctx.access_token, recent[i].uri,
-                               recent[i].name, sizeof recent[i].name, NULL, 0);
-    }
+    fill_details(recent_tracks, n);
     recent_count = n;
-}
-
-static int load_context(int i)
-{
-    const char *uri = recent[i].uri;
-    memset(ctx_tracks, 0, sizeof ctx_tracks);
-    if (is_collection(uri)) {
-        int n = liked_ready < MAX_CONTEXT_TRACKS ? liked_ready : MAX_CONTEXT_TRACKS;
-        memcpy(ctx_tracks, liked, sizeof ctx_tracks[0] * (size_t)n);
-        return n;
-    }
-    if (!strncmp(uri, "spotify:playlist:", 17))
-        return load_list_max(uri + 17, ctx_tracks, MAX_CONTEXT_TRACKS);
-    int n = spotify_sp_context(ctx.client_token, ctx.access_token, uri, NULL, 0, ctx_tracks,
-                               MAX_CONTEXT_TRACKS);
-    if (n < 0) n = 0;
-    fill_details(ctx_tracks, n);
-    return n;
 }
 
 static int load_list(const char *playlist_id, spotify_track *out)
 {
-    memset(out, 0, sizeof(spotify_track) * MAX_TRACKS);
-    int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username,
-                              playlist_id, out, MAX_TRACKS);
-    if (n < 0) n = 0;
-    /* Names come from batched metadata lookups. */
-    for (int i = 0; i < n && !player_quit; i += SPOTIFY_DETAILS_BATCH) {
-        int batch = n - i < SPOTIFY_DETAILS_BATCH ? n - i : SPOTIFY_DETAILS_BATCH;
-        spotify_sp_track_details(ctx.client_token, ctx.access_token, &out[i], batch);
-    }
-    return n;
+    return load_list_max(playlist_id, out, MAX_TRACKS, &open_fetched_count);
 }
 
 static void run_site_job(void)
@@ -961,17 +967,11 @@ static int loader_thread(SceSize args, void *argp)
     (void)args;
     (void)argp;
     while (!player_quit) {
-        if (recent_requested && !recent_done) {
+        unsigned recent_seq = recent_req_seq;
+        if (recent_seq != recent_done_seq) {
             load_recent();
-            recent_done = 1;
-            continue;
-        }
-        unsigned ctx_seq = ctx_req_seq;
-        if (ctx_seq != ctx_done_seq) {
-            int i = ctx_req_index;
-            ctx_done_count = load_context(i);
-            ctx_done_seq = ctx_seq;
-            log_printf("UI: %d songs in recent context %d\n", ctx_done_count, i);
+            recent_done_seq = recent_seq;
+            log_printf("UI: %d recently played songs\n", recent_count);
             continue;
         }
         unsigned site_seq = site_req_seq;
@@ -1003,10 +1003,30 @@ static int loader_thread(SceSize args, void *argp)
         unsigned seq = open_req_seq;
         if (seq != open_done_seq) {
             int p = open_req_playlist;
-            open_done_count = load_list(playlists[p].id, opened);
+            open_total_count = load_list(playlists[p].id, opened);
+            /* A larger page can be requested while the initial load runs. */
+            open_done_count = visible_tracks(open_fetched_count, open_load_target);
             open_done_playlist = p;
             open_done_seq = seq;
-            log_printf("UI: %d tracks in playlist %d\n", open_done_count, p);
+            log_printf("UI: %d tracks in playlist %d (first %d)\n",
+                       open_total_count, p, open_done_count);
+            continue;
+        }
+        if (open_done_seq == open_req_seq && open_done_count < open_total_count &&
+            open_done_count < open_load_target) {
+            int next = visible_tracks(open_total_count, open_load_target);
+            if (open_fetched_count < next) {
+                fill_details(&opened[open_fetched_count], next - open_fetched_count);
+                open_fetched_count = next;
+            }
+            open_done_count = next;
+            continue;
+        }
+        if (liked_reload_requested) {
+            liked_ids_loaded = liked_done = liked_count = liked_ready = 0;
+            liked_sort_applied = liked_reorder_pending = 0;
+            liked_load_target = liked_visible_limit;
+            liked_reload_requested = 0;
             continue;
         }
         if (!liked_ids_loaded) {
@@ -1014,21 +1034,34 @@ static int loader_thread(SceSize args, void *argp)
             int n = spotify_sp_tracks(ctx.client_token, ctx.access_token, ctx.cfg.username, "",
                                       liked, MAX_TRACKS);
             liked_count = n > 0 ? n : 0;
+            /* Date and source-order sorting needs IDs only. Sort before
+             * incremental metadata loads so the visible rows start in order. */
+            if (prefs[PREF_TRACK_SORT] != TRACK_SORT_TITLE &&
+                prefs[PREF_TRACK_SORT] != TRACK_SORT_ARTIST)
+                sort_tracks(liked, liked_count);
             liked_ids_loaded = 1;
             if (!liked_count) liked_done = 1;
             continue;
         }
         if (!liked_done) {
             const int i = liked_ready;
-            const int batch = liked_count - i < SPOTIFY_DETAILS_BATCH ? liked_count - i
-                                                                       : SPOTIFY_DETAILS_BATCH;
-            spotify_sp_track_details(ctx.client_token, ctx.access_token, &liked[i], batch);
-            liked_ready = i + batch;
-            if (liked_ready >= liked_count) {
-                liked_done = 1;
-                log_printf("UI: %d liked songs\n", liked_count);
+            /* Name/artist sorting needs all titles before it can be correct.
+             * Date-based ordering needs only the requested metadata page. */
+            int target = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                         prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST
+                         ? liked_count : liked_load_target;
+            if (target > liked_count) target = liked_count;
+            if (i < target) {
+                int batch = target - i;
+                if (batch > SPOTIFY_DETAILS_BATCH) batch = SPOTIFY_DETAILS_BATCH;
+                spotify_sp_track_details(ctx.client_token, ctx.access_token, &liked[i], batch);
+                liked_ready = i + batch;
+                if (liked_ready >= liked_count) {
+                    liked_done = 1;
+                    log_printf("UI: %d liked songs\n", liked_count);
+                }
+                continue;
             }
-            continue;
         }
         sceKernelDelayThread(30000);
     }
@@ -1358,8 +1391,10 @@ static volatile int thumb_px_slot = -1;     /* slot whose pixels wait for upload
 
 static void forget_texture(const r_tex *tex)
 {
-    for (int i = 0; i < MAX_PLAYLISTS; ++i)
+    for (int i = 0; i < MAX_PLAYLISTS; ++i) {
         if (playlist_rows[i].cover == tex) playlist_rows[i].cover = NULL;
+        if (my_playlist_rows[i].cover == tex) my_playlist_rows[i].cover = NULL;
+    }
     for (int i = 0; i < MAX_TRACKS; ++i) {
         if (liked_rows[i].cover == tex) liked_rows[i].cover = NULL;
         if (opened_rows[i].cover == tex) opened_rows[i].cover = NULL;
@@ -1368,8 +1403,6 @@ static void forget_texture(const r_tex *tex)
         if (found_rows[i].cover == tex) found_rows[i].cover = NULL;
     for (int i = 0; i < MAX_RECENT; ++i)
         if (recent_rows[i].cover == tex) recent_rows[i].cover = NULL;
-    for (int i = 0; i < MAX_CONTEXT_TRACKS; ++i)
-        if (ctx_rows[i].cover == tex) ctx_rows[i].cover = NULL;
     for (int i = 0; i < QUEUE_VIEW; ++i)
         if (queue_rows[i].cover == tex) queue_rows[i].cover = NULL;
 }
@@ -1477,13 +1510,13 @@ static void assign_thumbs(void)
 {
     ++frame_no;
     const int cat = xmb.cat;
-    if (cat != UI_CAT_LIKED && cat != UI_CAT_PLAYLISTS && cat != UI_CAT_SEARCH &&
+    if (cat != UI_CAT_LIKED && !playlist_cat(cat) && cat != UI_CAT_SEARCH &&
         cat != UI_CAT_RECENT && cat != UI_CAT_QUEUE)
         return;
     if (prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;     /* no covers to show */
     for (int lvl = 0; lvl < 2; ++lvl) {
         ui_list *list = &xmb.lists[cat][lvl];
-        if (!list->rows || list->count <= 0) continue;
+        if (!list->rows || list->count <= 0 || (cat == UI_CAT_RECENT && lvl != 0)) continue;
         if (lvl != xmb.level[cat] && (xmb.level_pos[cat] < 0.02f || xmb.level_pos[cat] > 0.98f))
             continue;
         /* The rows on screen: one above the selection and about three below. */
@@ -1492,13 +1525,12 @@ static void assign_thumbs(void)
             if (i < 0 || i >= list->count) continue;
             char url[160];
             url[0] = '\0';
-            if (cat == UI_CAT_PLAYLISTS && lvl == 0) {
-                copy_text(url, sizeof url, playlists[playlist_view[i]].image);
+            if (playlist_cat(cat) && lvl == 0) {
+                int p = cat == UI_CAT_MY_PLAYLISTS ? my_playlist_view[i] : playlist_view[i];
+                copy_text(url, sizeof url, playlists[p].image);
             } else if (cat == UI_CAT_RECENT && lvl == 0) {
-                const spotify_playlist *p = known_playlist(recent[i].uri);
-                if (p) copy_text(url, sizeof url, p->image);
-            } else if (cat == UI_CAT_RECENT) {
-                if (ctx_tracks[i].has_thumb) image_url(ctx_tracks[i].thumb, url, sizeof url);
+                if (recent_tracks[i].has_thumb)
+                    image_url(recent_tracks[i].thumb, url, sizeof url);
             } else if (cat == UI_CAT_QUEUE) {
                 const spotify_track *t = &queue[queue_view[i]];
                 if (t->has_thumb) image_url(t->thumb, url, sizeof url);
@@ -1514,6 +1546,45 @@ static void assign_thumbs(void)
 
 /* ------------------------------------------------------------ UI thread */
 
+/* Sort only the in-memory tracks, never modify the Spotify playlist.
+ * Preserve source_index as a deterministic tie-breaker for equal dates/names.
+ * Missing timestamps sort last; ties retain the source order. */
+static int name_order(const char *a, const char *b);
+
+static int track_compare(const void *left, const void *right)
+{
+    const spotify_track *a = (const spotify_track *)left;
+    const spotify_track *b = (const spotify_track *)right;
+    int result = 0;
+    switch (prefs[PREF_TRACK_SORT]) {
+    case TRACK_SORT_NEWEST:
+    case TRACK_SORT_OLDEST:
+        if (a->added_at != b->added_at) {
+            if (!a->added_at) return 1;
+            if (!b->added_at) return -1;
+            result = a->added_at > b->added_at ? 1 : -1;
+            if (prefs[PREF_TRACK_SORT] == TRACK_SORT_NEWEST) result = -result;
+        }
+        break;
+    case TRACK_SORT_TITLE:
+        result = name_order(a->name, b->name);
+        break;
+    case TRACK_SORT_ARTIST:
+        result = name_order(a->artist, b->artist);
+        if (!result) result = name_order(a->name, b->name);
+        break;
+    default:
+        break;
+    }
+    if (result) return result;
+    return (a->source_index > b->source_index) - (a->source_index < b->source_index);
+}
+
+static void sort_tracks(spotify_track *tracks, int count)
+{
+    if (count > 1) qsort(tracks, (size_t)count, sizeof tracks[0], track_compare);
+}
+
 static void track_rows(const spotify_track *tracks, int count, ui_row *rows)
 {
     for (int i = 0; i < count; ++i) {
@@ -1528,25 +1599,87 @@ static void track_rows(const spotify_track *tracks, int count, ui_row *rows)
 static void mark_playing(const char *id)
 {
     for (int i = 0; i < liked_shown; ++i) liked_rows[i].playing = id && !strcmp(liked[i].id, id);
-    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    ui_list *open_list = opened_list();
     if (open_shown_seq == open_done_seq && open_list->count > 0)
         for (int i = 0; i < open_list->count; ++i)
             opened_rows[i].playing = id && !strcmp(opened[i].id, id);
-    ui_list *ctx_list = &xmb.lists[UI_CAT_RECENT][1];
-    if (ctx_shown_seq == ctx_done_seq)
-        for (int i = 0; i < ctx_list->count; ++i)
-            ctx_rows[i].playing = id && !strcmp(ctx_tracks[i].id, id);
+    if (recent_req_seq == recent_done_seq && recent_shown_seq == recent_done_seq)
+        for (int i = 0; i < recent_count; ++i)
+            recent_rows[i].playing = id && !strcmp(recent_tracks[i].id, id);
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
     if (search_shown_seq == search_done_seq)
         for (int i = 0; i < results->count; ++i)
             found_rows[i].playing = id && !strcmp(found[i].id, id);
 }
 
+/* Rebuild row metadata after sorting so row index, thumbnails and playback
+ * all refer to the same track. The existing playing queue stays unchanged. */
+static void refresh_sorted_tracks(void)
+{
+    if (liked_done) {
+        sort_tracks(liked, liked_ready);
+        liked_shown = visible_tracks(liked_ready, liked_visible_limit);
+        track_rows(liked, liked_shown, liked_rows);
+        xmb.lists[UI_CAT_LIKED][0].rows = liked_rows;
+        xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
+        liked_sort_applied = liked_done;
+    }
+    ui_list *open_list = opened_list();
+    if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq) {
+        sort_tracks(opened, open_done_count);
+        track_rows(opened, open_done_count, opened_rows);
+        open_list->rows = opened_rows;
+        open_list->count = visible_tracks(open_done_count, opened_visible_limit);
+    }
+    if (current_index >= 0 && current_index < queue_len)
+        mark_playing(queue[current_index].id);
+}
+
+/* Request the next metadata page near the end of the visible list.
+ * The total collection cap is still 500 until cursor-based paging lands. */
+static void maybe_expand_visible_tracks(void)
+{
+    int *limit = NULL;
+    int total = 0, level = 0;
+    const int cat = xmb.cat;
+    if (cat == UI_CAT_LIKED) {
+        limit = &liked_visible_limit;
+        total = liked_count;
+    } else if (playlist_cat(cat) && cat == open_source_cat &&
+               xmb.level[cat] == 1 &&
+               open_req_seq == open_done_seq && open_shown_seq == open_done_seq) {
+        limit = &opened_visible_limit;
+        total = open_total_count;
+        level = 1;
+    }
+    if (!limit) return;
+    const int shown = xmb.lists[cat][level].count;
+    if (shown > 0 && shown < total && *limit <= shown &&
+        xmb.sel[cat][level] >= shown - 10) {
+        *limit += songs_page_size();
+        if (*limit > total) *limit = total;
+        if (cat == UI_CAT_LIKED) liked_load_target = *limit;
+        if (playlist_cat(cat)) open_load_target = *limit;
+    }
+}
+
 /* Picks up finished list loads and covers, and mirrors the player state. */
 static void sync_state(void)
 {
-    if (liked_ready > liked_shown) {
-        const int ready = liked_ready;
+    const int liked_needs_all_names = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
+                                      prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST;
+    if (liked_reload_requested) {
+        liked_shown = 0;
+        xmb.lists[UI_CAT_LIKED][0].count = 0;
+    } else if (liked_done && !liked_sort_applied) {
+        refresh_sorted_tracks();
+        liked_reorder_pending = 0;
+    } else if (!liked_done && (liked_reorder_pending || liked_needs_all_names)) {
+        /* Never display a partly sorted title/artist list. */
+        liked_shown = 0;
+        xmb.lists[UI_CAT_LIKED][0].count = 0;
+    } else if (visible_tracks(liked_ready, liked_visible_limit) > liked_shown) {
+        const int ready = visible_tracks(liked_ready, liked_visible_limit);
         track_rows(&liked[liked_shown], ready - liked_shown, &liked_rows[liked_shown]);
         xmb.lists[UI_CAT_LIKED][0].rows = liked_rows;
         xmb.lists[UI_CAT_LIKED][0].count = ready;
@@ -1554,44 +1687,51 @@ static void sync_state(void)
         const int playing = current_index;
         if (playing >= 0 && playing < queue_len) mark_playing(queue[playing].id);
     }
-    xmb.lists[UI_CAT_LIKED][0].loading = !liked_done;
-    ui_list *open_list = &xmb.lists[UI_CAT_PLAYLISTS][1];
+    xmb.lists[UI_CAT_LIKED][0].loading = liked_reload_requested || (!liked_done &&
+        (liked_reorder_pending || liked_needs_all_names || liked_ready < liked_visible_limit));
+    ui_list *open_list = opened_list();
     if (open_done_seq == open_req_seq && open_shown_seq != open_done_seq) {
+        sort_tracks(opened, open_done_count);
         track_rows(opened, open_done_count, opened_rows);
         open_list->rows = opened_rows;
-        open_list->count = open_done_count;
+        open_list->count = visible_tracks(open_done_count, opened_visible_limit);
         open_list->loading = 0;
         open_shown_seq = open_done_seq;
     }
 
-    if (xmb.cat == UI_CAT_RECENT && !recent_requested) {
-        recent_requested = 1;
-        xmb.lists[UI_CAT_RECENT][0].loading = 1;
+    /* Refresh on each entry, so tracks played during the session can appear
+     * without restarting the app. Never shuffle the listening-history order. */
+    static int was_recent;
+    const int in_recent = xmb.cat == UI_CAT_RECENT;
+    if (in_recent && !was_recent) {
+        ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
+        l->rows = recent_rows;
+        l->count = 0;
+        l->loading = 1;
+        ++recent_req_seq;
     }
-    if (recent_done && !recent_shown) {
-        for (int i = 0; i < recent_count; ++i) {
-            ui_row *r = &recent_rows[i];
-            const char *uri = recent[i].uri;
-            memset(r, 0, sizeof *r);
-            copy_text(r->title, sizeof r->title, recent[i].name[0] ? recent[i].name : uri);
-            copy_text(r->subtitle, sizeof r->subtitle,
-                      is_collection(uri) ? "Your Liked Songs"
-                      : !strncmp(uri, "spotify:playlist:", 17) ? "Playlist"
-                      : !strncmp(uri, "spotify:album:", 14) ? "Album" : "Artist");
-            r->color = row_color(uri);
-            r->round = !strncmp(uri, "spotify:artist:", 15);
-        }
-        xmb.lists[UI_CAT_RECENT][0].rows = recent_rows;
-        xmb.lists[UI_CAT_RECENT][0].count = recent_count;
-        xmb.lists[UI_CAT_RECENT][0].loading = 0;
-        recent_shown = 1;
+    was_recent = in_recent;
+    if (recent_req_seq && recent_done_seq == recent_req_seq &&
+        recent_shown_seq != recent_done_seq) {
+        track_rows(recent_tracks, recent_count, recent_rows);
+        ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
+        l->rows = recent_rows;
+        l->count = recent_count;
+        l->loading = 0;
+        recent_shown_seq = recent_done_seq;
+        if (recent_error) ui_toast(&xmb, "Couldn't load listening history");
+        if (current_index >= 0 && current_index < queue_len)
+            mark_playing(queue[current_index].id);
     }
-    if (ctx_done_seq == ctx_req_seq && ctx_shown_seq != ctx_done_seq) {
-        track_rows(ctx_tracks, ctx_done_count, ctx_rows);
-        xmb.lists[UI_CAT_RECENT][1].rows = ctx_rows;
-        xmb.lists[UI_CAT_RECENT][1].count = ctx_done_count;
-        xmb.lists[UI_CAT_RECENT][1].loading = 0;
-        ctx_shown_seq = ctx_done_seq;
+    /* Metadata for the next page has arrived: publish only complete rows. */
+    if (open_done_seq == open_req_seq && open_shown_seq == open_done_seq &&
+        open_list->count < visible_tracks(open_done_count, opened_visible_limit)) {
+        int count = visible_tracks(open_done_count, opened_visible_limit);
+        track_rows(&opened[open_list->count], count - open_list->count,
+                   &opened_rows[open_list->count]);
+        open_list->count = count;
+        if (current_index >= 0 && current_index < queue_len)
+            mark_playing(queue[current_index].id);
     }
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
     if (search_done_seq == search_req_seq && search_shown_seq != search_done_seq) {
@@ -1631,14 +1771,15 @@ static void sync_state(void)
         n->paused = control.paused;
         n->loading = play_state == PS_LOADING && control.position_ms == 0;
         if (play_state == PS_ERROR)
-            copy_text(n->album, sizeof n->album,
+            copy_text(n->album, sizeof n->album, ui_tr(
                       last_error == PLAYER_ERR_NO_MEMORY ? "Couldn't play: not enough memory"
                       : last_error <= -4 && last_error > -10
                           ? "Spotify refused this track (Premium needed?)"
                           : last_error == -2 ? "No playable version of this track"
-                          : "Couldn't play this track");
+                          : "Couldn't play this track"));
         else
-            snprintf(n->album, sizeof n->album, "From %s", queue_name);
+            snprintf(n->album, sizeof n->album,
+                     prefs[PREF_LANGUAGE] ? "%s içinden" : "From %s", queue_name);
         int upcoming = next_index(idx, 1);
         copy_text(n->next, sizeof n->next,
                   upcoming >= 0 && upcoming != idx ? queue[upcoming].name : "");
@@ -1660,12 +1801,14 @@ static void sync_state(void)
                 track_rows(&queue[qi], 1, &queue_rows[count]);
                 if (queued[qi]) {
                     char sub[96];
-                    snprintf(sub, sizeof sub, "Queued \xC2\xB7 %.80s", queue[qi].artist);
+                    snprintf(sub, sizeof sub, prefs[PREF_LANGUAGE]
+                             ? "Kuyrukta · %.80s" : "Queued · %.80s", queue[qi].artist);
                     copy_text(queue_rows[count].subtitle, sizeof queue_rows[count].subtitle, sub);
                 }
                 ++count;
             }
-            snprintf(ql->header, sizeof ql->header, "Up next \xC2\xB7 %d songs", count);
+            snprintf(ql->header, sizeof ql->header,
+                     prefs[PREF_LANGUAGE] ? "Sıradaki · %d şarkı" : "Up next · %d songs", count);
             ql->rows = queue_rows;
             ql->count = count;
             ql->movable = 1;
@@ -1694,30 +1837,12 @@ static void sync_state(void)
         like_seen_seq = like_done_seq;
         if (like_status == 200) {
             ui_toast(&xmb, like_remove ? "Removed from Liked Songs" : "Saved to Liked Songs");
-            /* Keep the list on screen in step once it is fully loaded. */
-            if (liked_done) {
-                int at = -1;
-                for (int i = 0; i < liked_shown && at < 0; ++i)
-                    if (!strcmp(liked[i].id, like_track.id)) at = i;
-                if (like_remove && at >= 0) {
-                    const size_t tail = (size_t)(liked_shown - at - 1);
-                    memmove(&liked[at], &liked[at + 1], sizeof liked[0] * tail);
-                    memmove(&liked_rows[at], &liked_rows[at + 1], sizeof liked_rows[0] * tail);
-                    liked_count = liked_count - 1;
-                    liked_ready = liked_ready - 1;
-                    --liked_shown;
-                } else if (!like_remove && at < 0 && liked_shown < MAX_TRACKS) {
-                    const size_t tail = (size_t)liked_shown;
-                    memmove(&liked[1], &liked[0], sizeof liked[0] * tail);
-                    memmove(&liked_rows[1], &liked_rows[0], sizeof liked_rows[0] * tail);
-                    liked[0] = like_track;
-                    track_rows(&liked[0], 1, &liked_rows[0]);
-                    liked_count = liked_count + 1;
-                    liked_ready = liked_ready + 1;
-                    ++liked_shown;
-                }
-                xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
-            }
+            /* Refresh IDs on the loader thread. A partial list cannot be
+             * safely spliced: its unseen tail must remain in source order. */
+            liked_reload_requested = 1;
+            liked_shown = 0;
+            xmb.lists[UI_CAT_LIKED][0].count = 0;
+            xmb.sel[UI_CAT_LIKED][0] = 0;
         } else {
             ui_toast(&xmb, "Couldn't update Liked Songs");
         }
@@ -1852,7 +1977,7 @@ static void start_search(void)
 {
     char text[128];
     copy_text(text, sizeof text, xmb.search_query);
-    if (!ask_text("Search Spotify", text, sizeof text)) return;
+    if (!ask_text(ui_tr("Search Spotify"), text, sizeof text)) return;
     copy_text(xmb.search_query, sizeof xmb.search_query, text);
     copy_text(search_text, sizeof search_text, text);
     ui_list *results = &xmb.lists[UI_CAT_SEARCH][0];
@@ -1939,29 +2064,32 @@ static const spotify_track *row_track(int cat, int level, int i)
 {
     if (i < 0) return NULL;
     if (cat == UI_CAT_LIKED && i < liked_shown) return &liked[i];
-    if (cat == UI_CAT_PLAYLISTS && level == 1 && open_shown_seq == open_done_seq &&
-        i < open_done_count)
+    if (playlist_cat(cat) && cat == open_source_cat && level == 1 &&
+        open_shown_seq == open_done_seq && i < open_done_count)
         return &opened[i];
     if (cat == UI_CAT_SEARCH && search_shown_seq == search_done_seq && i < search_done_count)
         return &found[i];
-    if (cat == UI_CAT_RECENT && level == 1 && ctx_shown_seq == ctx_done_seq && i < ctx_done_count)
-        return &ctx_tracks[i];
+    if (cat == UI_CAT_RECENT && level == 0 &&
+        recent_shown_seq == recent_done_seq && i < recent_count)
+        return &recent_tracks[i];
     if (cat == UI_CAT_QUEUE && i < xmb.lists[UI_CAT_QUEUE][0].count) return &queue[queue_view[i]];
     return NULL;
 }
 
 static int is_liked(const char *id)
 {
-    for (int i = 0; i < liked_shown; ++i)
+    for (int i = 0; i < liked_count; ++i)
         if (!strcmp(liked[i].id, id)) return 1;
     return 0;
 }
 
 static void options_menu(const ui_event *e)
 {
-    if (e->category == UI_CAT_PLAYLISTS && e->level == 0) {
-        if (e->index < 0 || e->index >= playlist_count) return;
-        menu_playlist = playlist_view[e->index];
+    if (playlist_cat(e->category) && e->level == 0) {
+        int count = e->category == UI_CAT_MY_PLAYLISTS ? my_playlist_count : playlist_count;
+        if (e->index < 0 || e->index >= count) return;
+        menu_playlist = e->category == UI_CAT_MY_PLAYLISTS
+                        ? my_playlist_view[e->index] : playlist_view[e->index];
         const int on = pin_index(playlists[menu_playlist].id) >= 0;
         const char *item = on ? "Unpin" : "Pin to the top";
         menu_actions[0] = on ? MENU_UNPIN : MENU_PIN;
@@ -2058,6 +2186,8 @@ static void menu_choice(const ui_event *e)
         /* Keep the selection on the playlist that moved. */
         for (int i = 0; i < playlist_count; ++i)
             if (playlist_view[i] == menu_playlist) xmb.sel[UI_CAT_PLAYLISTS][0] = i;
+        for (int i = 0; i < my_playlist_count; ++i)
+            if (my_playlist_view[i] == menu_playlist) xmb.sel[UI_CAT_MY_PLAYLISTS][0] = i;
         save_settings();
         break;
     }
@@ -2104,10 +2234,15 @@ static void site_finished(void)
             menu_actions[0] = MENU_UPDATE;
             menu_actions[1] = MENU_UPDATE_LATER;
             ui_menu_open(&xmb, items, 2);
-            snprintf(xmb.menu.title, sizeof xmb.menu.title, "Update %.15s is out", update_info.version);
+            snprintf(xmb.menu.title, sizeof xmb.menu.title,
+                     prefs[PREF_LANGUAGE] ? "%.15s güncellemesi hazır" : "Update %.15s is out",
+                     update_info.version);
         } else if (update_state == UPDATE_AVAILABLE) {
             char note[64];
-            snprintf(note, sizeof note, "Update %.15s: Settings \xE2\x86\x92 About", update_info.version);
+            snprintf(note, sizeof note,
+                     prefs[PREF_LANGUAGE] ? "%.15s güncellemesi: Ayarlar → Hakkında"
+                                          : "Update %.15s: Settings → About",
+                     update_info.version);
             ui_toast(&xmb, note);
         } else if (!update_auto) {
             ui_toast(&xmb, update_state == UPDATE_CURRENT ? "Up to date" : "Couldn't check for updates");
@@ -2120,7 +2255,9 @@ static void site_finished(void)
             menu_actions[0] = MENU_QUIT;
             menu_actions[1] = MENU_QUIT_LATER;
             ui_menu_open(&xmb, items, 2);
-            snprintf(xmb.menu.title, sizeof xmb.menu.title, "%.15s is installed", update_info.version);
+            snprintf(xmb.menu.title, sizeof xmb.menu.title,
+                     prefs[PREF_LANGUAGE] ? "%.15s yüklendi" : "%.15s is installed",
+                     update_info.version);
         } else {
             ui_toast(&xmb, update_state == UPDATE_INSTALLED ? "Updated: the new version starts next time"
                                                             : "Update failed, nothing changed");
@@ -2187,6 +2324,46 @@ static void pref_changed(pref_id id)
         break;
     case PREF_PLAYLIST_SORT:
         arrange_playlists();
+        break;
+    case PREF_LANGUAGE:
+        ui_set_language(prefs[PREF_LANGUAGE]);
+        arrange_playlists();
+        fill_settings();
+        break;
+    case PREF_SONGS_PER_LOAD:
+        liked_visible_limit = opened_visible_limit = songs_page_size();
+        liked_load_target = liked_reorder_pending ? liked_count : liked_visible_limit;
+        open_load_target = opened_visible_limit;
+        xmb.sel[UI_CAT_LIKED][0] = 0;
+        xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
+        xmb.sel[UI_CAT_MY_PLAYLISTS][1] = 0;
+        refresh_sorted_tracks();
+        if (!liked_done) {
+            liked_shown = visible_tracks(liked_ready, liked_visible_limit);
+            xmb.lists[UI_CAT_LIKED][0].count = liked_shown;
+        }
+        break;
+    case PREF_TRACK_SORT:
+        /* Finish partially loaded Liked Songs before switching sort order. */
+        if (liked_ids_loaded && !liked_done) {
+            liked_load_target = liked_count;
+            liked_reorder_pending = 1;
+        }
+        /* The loaded prefix alone cannot be re-sorted: unseen songs from
+         * later pages might belong ahead of it. Reload the complete index
+         * even when the playlist screen is not currently visible. */
+        if (open_req_seq != 0 && open_req_playlist > 0) {
+            opened_visible_limit = open_load_target = songs_page_size();
+            opened_list()->count = 0;
+            opened_list()->loading = 1;
+            ++open_req_seq;
+        }
+        refresh_sorted_tracks();
+        /* A subsequent play request must rebuild its queue in the new order. */
+        queue_key = -2;
+        xmb.sel[UI_CAT_LIKED][0] = 0;
+        xmb.sel[UI_CAT_PLAYLISTS][1] = 0;
+        xmb.sel[UI_CAT_MY_PLAYLISTS][1] = 0;
         break;
     case PREF_EQUALIZER:
     case PREF_NORMALIZE:
@@ -2258,18 +2435,26 @@ static int handle(const ui_event *e)
             static char uri[sizeof ctx.cfg.username + 32];
             snprintf(uri, sizeof uri, "spotify:user:%s:collection", ctx.cfg.username);
             play_from(liked, liked_shown, e->index, -1, "Liked Songs", uri);
-        } else if (e->category == UI_CAT_PLAYLISTS && e->level == 0) {
-            if (e->index < 0 || e->index >= playlist_count) break;
-            int p = playlist_view[e->index];
-            ui_list *l = &xmb.lists[UI_CAT_PLAYLISTS][1];
+        } else if (playlist_cat(e->category) && e->level == 0) {
+            int count = e->category == UI_CAT_MY_PLAYLISTS ? my_playlist_count : playlist_count;
+            if (e->index < 0 || e->index >= count) break;
+            int p = e->category == UI_CAT_MY_PLAYLISTS
+                    ? my_playlist_view[e->index] : playlist_view[e->index];
+            /* One shared opened-track buffer; invalidate the other category. */
+            xmb.lists[UI_CAT_PLAYLISTS][1].count = 0;
+            xmb.lists[UI_CAT_MY_PLAYLISTS][1].count = 0;
+            ui_list *l = &xmb.lists[e->category][1];
             copy_text(l->header, sizeof l->header, playlists[p].name);
             l->rows = opened_rows;
             l->count = 0;
             l->loading = 1;
-            ui_open_level(&xmb, UI_CAT_PLAYLISTS);
+            ui_open_level(&xmb, e->category);
+            open_source_cat = e->category;
             open_req_playlist = p;
+            opened_visible_limit = songs_page_size();
+            open_load_target = opened_visible_limit;
             ++open_req_seq;
-        } else if (e->category == UI_CAT_PLAYLISTS) {
+        } else if (playlist_cat(e->category) && e->category == open_source_cat) {
             /* Only once the list on screen is the one in the buffer. */
             if (open_req_seq == open_done_seq && open_shown_seq == open_done_seq)
             {
@@ -2279,18 +2464,11 @@ static int handle(const ui_event *e)
                           playlists[open_done_playlist].name, uri);
             }
         } else if (e->category == UI_CAT_RECENT && e->level == 0) {
-            ui_list *l = &xmb.lists[UI_CAT_RECENT][1];
-            copy_text(l->header, sizeof l->header, recent_rows[e->index].title);
-            l->rows = ctx_rows;
-            l->count = 0;
-            l->loading = 1;
-            ui_open_level(&xmb, UI_CAT_RECENT);
-            ctx_req_index = e->index;
-            ++ctx_req_seq;
-        } else if (e->category == UI_CAT_RECENT) {
-            if (ctx_req_seq == ctx_done_seq && ctx_shown_seq == ctx_done_seq)
-                play_from(ctx_tracks, ctx_done_count, e->index, -2000 - (int)ctx_done_seq,
-                          recent_rows[ctx_req_index].title, recent[ctx_req_index].uri);
+            if (recent_req_seq == recent_done_seq &&
+                recent_shown_seq == recent_done_seq &&
+                e->index >= 0 && e->index < recent_count)
+                play_from(recent_tracks, recent_count, e->index,
+                          -2000 - (int)recent_done_seq, "Recent", "");
         } else if (e->category == UI_CAT_QUEUE) {
             if (e->index >= 0 && e->index < xmb.lists[UI_CAT_QUEUE][0].count)
                 start_track(queue_view[e->index]);
@@ -2465,6 +2643,21 @@ static int playlist_before(int a, int b)
     }
 }
 
+/* My Playlists is alphabetical independently of the general playlist
+ * sort preference, while keeping deliberately pinned items on top. */
+static int my_playlist_before(int a, int b)
+{
+    const spotify_playlist *pa = &playlists[a], *pb = &playlists[b];
+    int ia = pin_index(pa->id), ib = pin_index(pb->id);
+    if (ia >= 0 || ib >= 0) {
+        if (ia < 0) return 0;
+        if (ib < 0) return 1;
+        return ia < ib;
+    }
+    int result = name_order(pa->name, pb->name);
+    return result < 0 || (result == 0 && strcmp(pa->id, pb->id) < 0);
+}
+
 /* Lists the playlists in the chosen order; rows hold no covers until the
  * thumbnails are assigned again on the next frame. */
 static void arrange_playlists(void)
@@ -2482,25 +2675,62 @@ static void arrange_playlists(void)
         ui_row *r = &playlist_rows[i];
         memset(r, 0, sizeof *r);
         copy_text(r->title, sizeof r->title, p->name);
-        const char *pin = pin_index(p->id) >= 0 ? "Pinned \xC2\xB7 " : "";
+        const int pinned_playlist = pin_index(p->id) >= 0;
         if (p->total >= 0)
-            snprintf(r->subtitle, sizeof r->subtitle, "%sPlaylist \xC2\xB7 %d songs", pin, p->total);
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%sÇalma listesi · %d şarkı" : "%sPlaylist · %d songs",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "", p->total);
         else
-            snprintf(r->subtitle, sizeof r->subtitle, "%sPlaylist", pin);
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "",
+                     ui_tr("Playlist"));
         r->color = row_color(p->name);
     }
     xmb.lists[UI_CAT_PLAYLISTS][0].rows = playlist_rows;
     xmb.lists[UI_CAT_PLAYLISTS][0].count = playlist_count;
+
+    /* This list is populated by scanning rootlist pages, NOT by filtering
+     * only the first 100 entries of the general section. */
+    for (int i = 0; i < my_playlist_count; ++i) {
+        int p = MAX_PLAYLISTS + 1 + i, j = i;
+        while (j > 0 && my_playlist_before(p, my_playlist_view[j - 1])) {
+            my_playlist_view[j] = my_playlist_view[j - 1];
+            --j;
+        }
+        my_playlist_view[j] = p;
+    }
+    for (int i = 0; i < my_playlist_count; ++i) {
+        const spotify_playlist *p = &playlists[my_playlist_view[i]];
+        ui_row *r = &my_playlist_rows[i];
+        memset(r, 0, sizeof *r);
+        copy_text(r->title, sizeof r->title, p->name);
+        const int pinned_playlist = pin_index(p->id) >= 0;
+        if (p->total >= 0)
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%sÇalma listesi · %d şarkı" : "%sPlaylist · %d songs",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "", p->total);
+        else
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "",
+                     ui_tr("Playlist"));
+        r->color = row_color(p->name);
+    }
+    xmb.lists[UI_CAT_MY_PLAYLISTS][0].rows = my_playlist_rows;
+    xmb.lists[UI_CAT_MY_PLAYLISTS][0].count = my_playlist_count;
 }
 
 static void load_playlists(void)
 {
-    frame_message("Loading your library\xE2\x80\xA6", NULL);
+    frame_message(ui_tr("Loading your library…"), NULL);
+    my_playlist_count = 0;
     int n = spotify_sp_playlists(ctx.client_token, ctx.access_token, ctx.cfg.username,
-                                 &playlists[1], MAX_PLAYLISTS);
+                                 &playlists[1], MAX_PLAYLISTS,
+                                 &playlists[MAX_PLAYLISTS + 1], MAX_PLAYLISTS,
+                                 &my_playlist_count);
     playlist_count = n > 0 ? n : 0;
     arrange_playlists();
-    log_printf("UI: %d playlists\n", n);
+    log_printf("UI: %d playlists, %d owned by current user\n",
+               playlist_count, my_playlist_count);
 }
 
 static int setup_ui(void)
@@ -2566,7 +2796,7 @@ int spotify_ui_run(volatile int *exit_requested)
     spotify_ui_hooks hooks = { on_status, on_pair_code };
     int ret = spotify_ctx_start(&ctx, &hooks);
     if (ret < 0) {
-        frame_message("Could not sign in to Spotify", log_enabled()
+        frame_message(ui_tr("Could not sign in to Spotify"), log_enabled()
                       ? "See spotify.log. START: exit"
                       : "debug = on in settings.ini logs it. START: exit");
         SceCtrlData pad;
@@ -2639,7 +2869,7 @@ int spotify_ui_run(volatile int *exit_requested)
                 /* Like holding the power switch: the console shuts down. */
                 log_printf("UI: sleep timer: turning the PSP off\n");
                 log_flush();
-                frame_message("Good night", NULL);
+                frame_message(ui_tr("Good night"), NULL);
                 scePowerRequestStandby();
             }
             ui_toast(&xmb, "Sleep timer: paused");
@@ -2651,6 +2881,7 @@ int spotify_ui_run(volatile int *exit_requested)
             last = sceKernelGetSystemTimeWide();
         }
         handle_connect();
+        maybe_expand_visible_tracks();
         sync_state();
         report_connect();
         log_tick();
@@ -2673,7 +2904,7 @@ int spotify_ui_run(volatile int *exit_requested)
     }
 
     log_printf("UI: exit requested\n");
-    frame_message("Stopping\xE2\x80\xA6", NULL);
+    frame_message(ui_tr("Stopping…"), NULL);
     player_quit = 1;
     SceUID helpers[3] = { cover_thid, loader_thid, thumb_thid };
     for (int i = 0; i < 3; ++i) {
