@@ -310,6 +310,7 @@ int ui_init(ui_state *ui)
     theme_defaults(&ui->theme);
     ui->theme_target = ui->theme;
     ui->volume = 80;
+    ui->style.list_covers = 1; /* Keep the existing look for preview clients. */
     for (int i = 0; i < UI_CATS; ++i) ui->cat_order[i] = i;
     ui->cat_count = UI_CATS;
     ui->cat = UI_CAT_PLAYLISTS;
