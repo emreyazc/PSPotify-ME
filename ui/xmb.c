@@ -110,6 +110,7 @@ const char *ui_tr(const char *english)
         { "Cover shape", "Kapak şekli" },
         { "Text size", "Yazı boyutu" },
         { "List style", "Liste biçimi" },
+        { "List artwork", "Liste görselleri" },
         { "Animations", "Animasyonlar" },
         { "Clock", "Saat" },
         { "Button hints", "Tuş ipuçları" },
@@ -558,6 +559,7 @@ static list_style style_for(const ui_state *ui, int search)
     int d = ui->style.density;
     if (d < 0 || d > 2) d = 0;
     list_style st = base[d][search ? 1 : 0];
+    st.covers = st.covers && ui->style.list_covers;
     if (ui->style.text_size == UI_TEXT_SMALL) {
         st.title_small -= 1;
         st.title_big -= 1;
@@ -973,7 +975,8 @@ static void draw_mini(const ui_state *ui)
     const float y = SCREEN_H - MINI_H;
     r_rect(0, y, SCREEN_W, MINI_H, t->player_bar);
     draw_progress(ui, 0, y, SCREEN_W, 2, 1.0f);
-    draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
+    if (ui->style.list_covers)
+        draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
 
     char span[48], pos[16], dur[16];
     format_time(n->pos_ms, pos, sizeof pos);
@@ -984,7 +987,7 @@ static void draw_mini(const ui_state *ui)
     right -= 10 + font_width(FONT_REGULAR, 10, span);
     font_draw(FONT_REGULAR, 10, right, y + 10, t->dim, n->loading ? "" : span);
 
-    float x = 42;
+    float x = ui->style.list_covers ? 42.0f : 12.0f;
     float tw = font_draw_fit(FONT_BOLD, 12, x, y + 9, t->text, n->title, right - x - 80);
     font_draw_fit(FONT_REGULAR, 11, x + tw + 8, y + 10, t->dim, n->artist, right - (x + tw + 8) - 12);
 }
