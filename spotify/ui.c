@@ -1046,7 +1046,7 @@ static int loader_thread(SceSize args, void *argp)
         if (!liked_done) {
             const int i = liked_ready;
             /* Name/artist sorting needs all titles before it can be correct.
-             * Date and Spotify order need only the requested metadata page. */
+             * Date-based ordering needs only the requested metadata page. */
             int target = prefs[PREF_TRACK_SORT] == TRACK_SORT_TITLE ||
                          prefs[PREF_TRACK_SORT] == TRACK_SORT_ARTIST
                          ? liked_count : liked_load_target;
@@ -1547,7 +1547,7 @@ static void assign_thumbs(void)
 /* ------------------------------------------------------------ UI thread */
 
 /* Sort only the in-memory tracks, never modify the Spotify playlist.
- * Preserve source_index so switching back to Spotify order is lossless.
+ * Preserve source_index as a deterministic tie-breaker for equal dates/names.
  * Missing timestamps sort last; ties retain the source order. */
 static int name_order(const char *a, const char *b);
 
