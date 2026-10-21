@@ -113,6 +113,7 @@ enum { UI_LR_BOTH, UI_LR_SEEK, UI_LR_SKIP };
 
 typedef struct ui_style {
     int density;        /* UI_DENSITY_*: list rows */
+    int list_covers;    /* list artwork and mini-player image; Now Playing unaffected */
     int text_size;      /* UI_TEXT_*: list titles */
     int anim;           /* UI_ANIM_* */
     int hide_hints;     /* no button hints in the top bar */
