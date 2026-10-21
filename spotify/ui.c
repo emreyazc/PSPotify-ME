@@ -408,6 +408,8 @@ static void apply_style(void)
 {
     ui_style *st = &xmb.style;
     st->density = prefs[PREF_DENSITY];
+    st->list_covers = prefs[PREF_LIST_COVERS];
+    thumbs_enabled = st->list_covers;
     st->text_size = prefs[PREF_TEXT_SIZE];
     st->anim = prefs[PREF_ANIMATIONS];
     st->hide_hints = prefs[PREF_HINTS];
@@ -1386,6 +1388,8 @@ typedef struct thumb_slot {
 static thumb_slot thumbs[THUMB_SLOTS];
 static SceUID thumb_lock = -1;
 static volatile unsigned frame_no;
+/* UI and thumbnail worker share this flag; Now Playing artwork is independent. */
+static volatile int thumbs_enabled = 1;
 static uint32_t thumb_px[THUMB * THUMB];
 static volatile int thumb_px_slot = -1;     /* slot whose pixels wait for upload */
 
@@ -1410,7 +1414,7 @@ static void forget_texture(const r_tex *tex)
 /* The texture for url if it is loaded; otherwise queues it. UI thread. */
 static r_tex *thumb_for(const char *url, int priority)
 {
-    if (!url[0] || thumb_lock < 0) return NULL;
+    if (!thumbs_enabled || !url[0] || thumb_lock < 0) return NULL;
     sceKernelWaitSema(thumb_lock, 1, NULL);
     r_tex *tex = NULL;
     int hit = -1, victim = -1;
@@ -1448,6 +1452,24 @@ static r_tex *thumb_for(const char *url, int priority)
 }
 
 /* Turns a downloaded thumbnail into a texture. UI thread. */
+/* Called on the UI thread when artwork is disabled.  Release cached GPU
+ * textures and cancel pending requests, without affecting Now Playing. */
+static void clear_thumbs(void)
+{
+    if (thumb_lock < 0) return;
+    sceKernelWaitSema(thumb_lock, 1, NULL);
+    for (int i = 0; i < THUMB_SLOTS; ++i) {
+        thumb_slot *s = &thumbs[i];
+        if (s->tex) {
+            forget_texture(s->tex);
+            r_tex_destroy(s->tex);
+        }
+        memset(s, 0, sizeof *s);
+    }
+    thumb_px_slot = -1;
+    sceKernelSignalSema(thumb_lock, 1);
+}
+
 static void upload_thumb(void)
 {
     int slot = thumb_px_slot;
@@ -1470,6 +1492,10 @@ static int thumb_thread(SceSize args, void *argp)
     static uint32_t scaled[THUMB * THUMB];
     static char url[160];
     while (!player_quit) {
+        if (!thumbs_enabled) {
+            sceKernelDelayThread(30000);
+            continue;
+        }
         int slot = -1;
         sceKernelWaitSema(thumb_lock, 1, NULL);
         /* Only rows on screen now that have stayed there a moment; the one
@@ -1493,13 +1519,21 @@ static int thumb_thread(SceSize args, void *argp)
         }
         if (fetch_image(url, jpeg, sizeof jpeg, scaled, THUMB) < 0) {
             sceKernelWaitSema(thumb_lock, 1, NULL);
-            thumbs[slot].state = THUMB_FAILED;
+            if (thumbs[slot].state == THUMB_LOADING && !strcmp(thumbs[slot].url, url))
+                thumbs[slot].state = THUMB_FAILED;
             sceKernelSignalSema(thumb_lock, 1);
             continue;
         }
-        while (thumb_px_slot >= 0 && !player_quit) sceKernelDelayThread(5000);
-        memcpy(thumb_px, scaled, sizeof thumb_px);
-        thumb_px_slot = slot;
+        while (thumb_px_slot >= 0 && !player_quit && thumbs_enabled)
+            sceKernelDelayThread(5000);
+        if (!thumbs_enabled || player_quit) continue;
+        sceKernelWaitSema(thumb_lock, 1, NULL);
+        if (thumbs_enabled && thumbs[slot].state == THUMB_LOADING &&
+            !strcmp(thumbs[slot].url, url)) {
+            memcpy(thumb_px, scaled, sizeof thumb_px);
+            thumb_px_slot = slot;
+        }
+        sceKernelSignalSema(thumb_lock, 1);
     }
     return 0;
 }
@@ -1513,7 +1547,7 @@ static void assign_thumbs(void)
     if (cat != UI_CAT_LIKED && !playlist_cat(cat) && cat != UI_CAT_SEARCH &&
         cat != UI_CAT_RECENT && cat != UI_CAT_QUEUE)
         return;
-    if (prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;     /* no covers to show */
+    if (!thumbs_enabled || prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;
     for (int lvl = 0; lvl < 2; ++lvl) {
         ui_list *list = &xmb.lists[cat][lvl];
         if (!list->rows || list->count <= 0 || (cat == UI_CAT_RECENT && lvl != 0)) continue;
@@ -2313,6 +2347,10 @@ static void pref_changed(pref_id id)
         break;
     case PREF_COVER_SHAPE:
         rebuild_cover();
+        break;
+    case PREF_LIST_COVERS:
+        apply_style();
+        if (!prefs[id]) clear_thumbs();
         break;
     case PREF_VISUALIZER:
     case PREF_TEXT_SIZE:
