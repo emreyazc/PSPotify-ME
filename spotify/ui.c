@@ -57,7 +57,9 @@ static ui_state xmb;
 /* ------------------------------------------------------------ library */
 
 /* playlists[0] is unused (Liked Songs has its own category). */
-static spotify_playlist playlists[MAX_PLAYLISTS + 1];
+/* First 100 general playlists; second 100 are the separately scanned
+ * personal playlists. Extra entries never enter the general category. */
+static spotify_playlist playlists[MAX_PLAYLISTS * 2 + 1];
 static int playlist_count;
 static ui_row playlist_rows[MAX_PLAYLISTS], my_playlist_rows[MAX_PLAYLISTS];
 static int my_playlist_view[MAX_PLAYLISTS], my_playlist_count;
@@ -2641,6 +2643,21 @@ static int playlist_before(int a, int b)
     }
 }
 
+/* My Playlists is alphabetical independently of the general playlist
+ * sort preference, while keeping deliberately pinned items on top. */
+static int my_playlist_before(int a, int b)
+{
+    const spotify_playlist *pa = &playlists[a], *pb = &playlists[b];
+    int ia = pin_index(pa->id), ib = pin_index(pb->id);
+    if (ia >= 0 || ib >= 0) {
+        if (ia < 0) return 0;
+        if (ib < 0) return 1;
+        return ia < ib;
+    }
+    int result = name_order(pa->name, pb->name);
+    return result < 0 || (result == 0 && strcmp(pa->id, pb->id) < 0);
+}
+
 /* Lists the playlists in the chosen order; rows hold no covers until the
  * thumbnails are assigned again on the next frame. */
 static void arrange_playlists(void)
@@ -2672,17 +2689,31 @@ static void arrange_playlists(void)
     xmb.lists[UI_CAT_PLAYLISTS][0].rows = playlist_rows;
     xmb.lists[UI_CAT_PLAYLISTS][0].count = playlist_count;
 
-    /* Filter after sorting so both sections use identical ordering/pins. */
-    my_playlist_count = 0;
-    for (int i = 0; i < playlist_count; ++i) {
-        const int index = playlist_view[i];
-        const spotify_playlist *p = &playlists[index];
-        if (!p->owner[0] || strcmp(p->owner, ctx.cfg.username)) continue;
-        my_playlist_view[my_playlist_count] = index;
-        ui_row *r = &my_playlist_rows[my_playlist_count];
-        *r = playlist_rows[i];
-        r->cover = NULL;
-        ++my_playlist_count;
+    /* This list is populated by scanning rootlist pages, NOT by filtering
+     * only the first 100 entries of the general section. */
+    for (int i = 0; i < my_playlist_count; ++i) {
+        int p = MAX_PLAYLISTS + 1 + i, j = i;
+        while (j > 0 && my_playlist_before(p, my_playlist_view[j - 1])) {
+            my_playlist_view[j] = my_playlist_view[j - 1];
+            --j;
+        }
+        my_playlist_view[j] = p;
+    }
+    for (int i = 0; i < my_playlist_count; ++i) {
+        const spotify_playlist *p = &playlists[my_playlist_view[i]];
+        ui_row *r = &my_playlist_rows[i];
+        memset(r, 0, sizeof *r);
+        copy_text(r->title, sizeof r->title, p->name);
+        const int pinned_playlist = pin_index(p->id) >= 0;
+        if (p->total >= 0)
+            snprintf(r->subtitle, sizeof r->subtitle,
+                     prefs[PREF_LANGUAGE] ? "%sÇalma listesi · %d şarkı" : "%sPlaylist · %d songs",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "", p->total);
+        else
+            snprintf(r->subtitle, sizeof r->subtitle, "%s%s",
+                     pinned_playlist ? (prefs[PREF_LANGUAGE] ? "Sabit · " : "Pinned · ") : "",
+                     ui_tr("Playlist"));
+        r->color = row_color(p->name);
     }
     xmb.lists[UI_CAT_MY_PLAYLISTS][0].rows = my_playlist_rows;
     xmb.lists[UI_CAT_MY_PLAYLISTS][0].count = my_playlist_count;
@@ -2691,8 +2722,11 @@ static void arrange_playlists(void)
 static void load_playlists(void)
 {
     frame_message(ui_tr("Loading your library…"), NULL);
+    my_playlist_count = 0;
     int n = spotify_sp_playlists(ctx.client_token, ctx.access_token, ctx.cfg.username,
-                                 &playlists[1], MAX_PLAYLISTS);
+                                 &playlists[1], MAX_PLAYLISTS,
+                                 &playlists[MAX_PLAYLISTS + 1], MAX_PLAYLISTS,
+                                 &my_playlist_count);
     playlist_count = n > 0 ? n : 0;
     arrange_playlists();
     log_printf("UI: %d playlists, %d owned by current user\n",
