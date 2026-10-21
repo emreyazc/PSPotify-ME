@@ -815,7 +815,8 @@ static void draw_search(const ui_state *ui, float bottom, float alpha, float sli
                       w - 110);
         char count[24];
         if (results->loading) snprintf(count, sizeof count, "%s", ui_tr("Searching…"));
-        else snprintf(count, sizeof count, ui_tr("%d results"), results->count);
+        else if (ui_language) snprintf(count, sizeof count, "%d sonuç", results->count);
+        else snprintf(count, sizeof count, "%d results", results->count);
         float cw = font_width(FONT_REGULAR, 10, count);
         font_draw(FONT_REGULAR, 10, x + w - 12 - cw, y + 7, color_fade(t->dim, alpha), count);
         const list_style st = style_for(ui, 1);
