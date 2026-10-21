@@ -32,10 +32,10 @@ static const char *const now_tokens[] = { "classic", "centered", "text" };
 static const char *const sort_names[] = { "Spotify order", "Name", "Most songs" };
 static const char *const sort_tokens[] = { "spotify", "name", "size" };
 static const char *const track_sort_names[] = {
-    "Newest first", "Oldest first", "Spotify order", "Title A-Z", "Artist A-Z"
+    "Newest first", "Oldest first", "Title A-Z", "Artist A-Z"
 };
 static const char *const track_sort_tokens[] = {
-    "newest", "oldest", "spotify", "title", "artist"
+    "newest", "oldest", "title", "artist"
 };
 static const char *const songs_per_load_names[] = { "25 songs", "50 songs", "75 songs", "100 songs" };
 static const char *const songs_per_load_tokens[] = { "25", "50", "75", "100" };
@@ -148,6 +148,12 @@ int prefs_read(const char *key, const char *value)
         const pref_def *d = &defs[i];
         if (strcmp(d->key, key) != 0) continue;
         if (d->transient) return 1;
+        /* Old settings.ini files may still store track_sort = spotify.
+         * That display option has been removed; migrate it to newest first. */
+        if (i == PREF_TRACK_SORT && strcmp(value, "spotify") == 0) {
+            prefs[i] = TRACK_SORT_NEWEST;
+            return 1;
+        }
         if (d->tokens) {
             for (int v = 0; v < d->count; ++v)
                 if (!strcmp(d->tokens[v], value)) prefs[i] = v;
