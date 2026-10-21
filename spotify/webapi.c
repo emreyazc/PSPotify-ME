@@ -680,77 +680,133 @@ static void parse_playlist_picture(const uint8_t *attrs, size_t len, spotify_pla
     }
 }
 
-static int sp_playlists_unlocked(const char *client_token, const char *access_token,
-                                 const char *username, spotify_playlist *out, int max)
+/* Only keep the first max general playlists and the alphabetically first
+ * owned_max playlists. Scanning multiple rootlist pages prevents users with
+ * many followed playlists from seeing just a handful of their own. */
+static int playlist_name_cmp(const char *a, const char *b)
 {
-    static char url[256];
-    if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
-    snprintf(url, sizeof url, SPCLIENT "/playlist/v2/user/%s/rootlist"
-             "?decorate=revision,attributes,length,owner,capabilities,status_code"
-             "&from=0&length=%d", username, max * 2);
-    size_t len = 0;
-    int status = sp_get(url, &len);
-    if (status != 200) return status < 0 ? status : -status;
-
-    /* SelectedListContent.contents(5) = ListItems { items(3) Item{uri=1},
-     * meta_items(4) MetaItem{attributes(2){name=1}, length(3)} }, the
-     * meta items parallel to the items. */
-    const uint8_t *contents;
-    size_t contents_len;
-    if (pb_find_bytes(resp_buf, len, 5, &contents, &contents_len) < 0) return 0;
-
-    static const uint8_t *uris[512];
-    static size_t uri_lens[512];
-    static const uint8_t *metas[512];
-    static size_t meta_lens[512];
-    int n_items = 0, n_metas = 0;
-    pb_reader r;
-    pb_field f;
-    pb_init(&r, contents, contents_len);
-    while (pb_next(&r, &f) == 1) {
-        if (f.field == 3 && f.wire == 2 && n_items < 512) {
-            const uint8_t *uri;
-            size_t uri_len;
-            if (pb_find_bytes(f.data, f.len, 1, &uri, &uri_len) < 0) { uri = f.data; uri_len = 0; }
-            uris[n_items] = uri;
-            uri_lens[n_items++] = uri_len;
-        } else if (f.field == 4 && f.wire == 2 && n_metas < 512) {
-            metas[n_metas] = f.data;
-            meta_lens[n_metas++] = f.len;
-        }
+    for (;;) {
+        unsigned ca = (unsigned char)*a++, cb = (unsigned char)*b++;
+        if (ca >= 'A' && ca <= 'Z') ca += 'a' - 'A';
+        if (cb >= 'A' && cb <= 'Z') cb += 'a' - 'A';
+        if (ca != cb || !ca) return ca < cb ? -1 : ca > cb ? 1 : 0;
     }
-    int aligned = n_metas == n_items;
-    int count = 0, with_image = 0;
-    for (int i = 0; i < n_items && count < max; ++i) {
-        if (uri_lens[i] != 39 || memcmp(uris[i], "spotify:playlist:", 17) != 0)
-            continue;                                  /* folder markers etc. */
-        spotify_playlist *p = &out[count++];
-        copy_str(p->id, sizeof p->id, uris[i] + 17, 22);
-        snprintf(p->name, sizeof p->name, "Playlist %.8s", p->id);
-        p->total = -1;
-        p->owner[0] = '\0';
-        p->image[0] = '\0';
-        if (!aligned) continue;
-        pb_init(&r, metas[i], meta_lens[i]);
-        while (pb_next(&r, &f) == 1) {
-            if (f.field == 2 && f.wire == 2) {
-                const uint8_t *name;
-                size_t name_len;
-                if (pb_find_bytes(f.data, f.len, 1, &name, &name_len) == 0)
-                    copy_str(p->name, sizeof p->name, name, name_len);
-                parse_playlist_picture(f.data, f.len, p);
-                with_image += p->image[0] != '\0';
-            } else if (f.field == 3 && f.wire == 0) {
-                p->total = (int)f.varint;
-            } else if (f.field == 5 && f.wire == 2) {
-                /* playlist4 MetaItem.owner_username. Do not guess the
-                 * owner of entries lacking metadata. */
-                copy_str(p->owner, sizeof p->owner, f.data, f.len);
+}
+
+static void owned_playlist_insert(spotify_playlist *owned, int *count, int max,
+                                  const spotify_playlist *p)
+{
+    if (!owned || !count || max <= 0) return;
+    for (int k = 0; k < *count; ++k)
+        if (!strcmp(owned[k].id, p->id)) return;
+    int at = 0;
+    while (at < *count) {
+        int cmp = playlist_name_cmp(owned[at].name, p->name);
+        if (cmp > 0 || (cmp == 0 && strcmp(owned[at].id, p->id) > 0)) break;
+        ++at;
+    }
+    if (at >= max) return;
+    int n = *count < max ? *count : max - 1;
+    if (n > at)
+        memmove(&owned[at + 1], &owned[at], sizeof owned[0] * (size_t)(n - at));
+    owned[at] = *p;
+    if (*count < max) ++*count;
+}
+
+static int sp_playlists_unlocked(const char *client_token, const char *access_token,
+                                 const char *username, spotify_playlist *out, int max,
+                                 spotify_playlist *owned, int owned_max, int *owned_count)
+{
+    /* At most 10 requests of 200 rootlist items. Normal display and My
+     * Playlists each use 100 slots, irrespective of the total scanned. */
+    enum { ROOT_PAGE = 200, ROOT_SCAN_LIMIT = 2000 };
+    static char url[256];
+    static const uint8_t *uris[ROOT_PAGE];
+    static size_t uri_lens[ROOT_PAGE];
+    static const uint8_t *metas[ROOT_PAGE];
+    static size_t meta_lens[ROOT_PAGE];
+    int count = 0, own_count = 0, pages = 0, scanned = 0, missing_meta = 0;
+    if (owned_count) *owned_count = 0;
+    if (!out || max <= 0 || !owned || owned_max <= 0 || !owned_count) return -1;
+    if (sp_headers(client_token, access_token, "application/x-protobuf") < 0) return -1;
+    for (int offset = 0; offset < ROOT_SCAN_LIMIT; ) {
+        int q = snprintf(url, sizeof url, SPCLIENT "/playlist/v2/user/%s/rootlist"
+                         "?decorate=revision,attributes,length,owner,capabilities,status_code"
+                         "&from=%d&length=%d", username, offset, ROOT_PAGE);
+        if (q <= 0 || (size_t)q >= sizeof url) break;
+        size_t len = 0;
+        int status = sp_get(url, &len);
+        if (status != 200) {
+            log_printf("LIBRARY: rootlist page %d HTTP %d\n", offset, status);
+            if (!pages) return status < 0 ? status : -status;
+            break;  /* retain successfully loaded pages */
+        }
+
+        /* SelectedListContent.contents(5) = ListItems {
+         * items(3) Item{uri=1}, meta_items(4) MetaItem {
+         * attributes(2), length(3), owner_username(5) } }.
+         * MetaItem fields are parallel to the rootlist items. */
+        const uint8_t *contents = NULL;
+        size_t contents_len = 0;
+        if (pb_find_bytes(resp_buf, len, 5, &contents, &contents_len) < 0) break;
+        int n_items = 0, n_metas = 0;
+        pb_reader r;
+        pb_field field;
+        pb_init(&r, contents, contents_len);
+        while (pb_next(&r, &field) == 1) {
+            if (field.field == 3 && field.wire == 2 && n_items < ROOT_PAGE) {
+                const uint8_t *uri;
+                size_t uri_len;
+                if (pb_find_bytes(field.data, field.len, 1, &uri, &uri_len) < 0) {
+                    uri = NULL; uri_len = 0;
+                }
+                uris[n_items] = uri;
+                uri_lens[n_items++] = uri_len;
+            } else if (field.field == 4 && field.wire == 2 && n_metas < ROOT_PAGE) {
+                metas[n_metas] = field.data;
+                meta_lens[n_metas++] = field.len;
             }
         }
+        if (n_items == 0) break;
+        const int aligned = n_items == n_metas;
+        if (!aligned) missing_meta += n_items;
+        for (int i = 0; i < n_items; ++i) {
+            if (uri_lens[i] != 39 || !uris[i] ||
+                memcmp(uris[i], "spotify:playlist:", 17) != 0)
+                continue;
+            spotify_playlist item;
+            memset(&item, 0, sizeof item);
+            copy_str(item.id, sizeof item.id, uris[i] + 17, 22);
+            snprintf(item.name, sizeof item.name, "Playlist %.8s", item.id);
+            item.total = -1;
+            if (aligned) {
+                pb_init(&r, metas[i], meta_lens[i]);
+                while (pb_next(&r, &field) == 1) {
+                    if (field.field == 2 && field.wire == 2) {
+                        const uint8_t *name;
+                        size_t name_len;
+                        if (pb_find_bytes(field.data, field.len, 1, &name, &name_len) == 0)
+                            copy_str(item.name, sizeof item.name, name, name_len);
+                        parse_playlist_picture(field.data, field.len, &item);
+                    } else if (field.field == 3 && field.wire == 0) {
+                        item.total = (int)field.varint;
+                    } else if (field.field == 5 && field.wire == 2) {
+                        copy_str(item.owner, sizeof item.owner, field.data, field.len);
+                    }
+                }
+            }
+            if (count < max) out[count++] = item;
+            if (item.owner[0] && strcmp(item.owner, username) == 0)
+                owned_playlist_insert(owned, &own_count, owned_max, &item);
+        }
+        scanned += n_items;
+        ++pages;
+        offset += n_items;
+        if (n_items < ROOT_PAGE) break;
     }
-    log_printf("LIBRARY: %d playlists (%d items, %d meta, %d with a cover)\n", count, n_items,
-               n_metas, with_image);
+    *owned_count = own_count;
+    log_printf("LIBRARY: rootlist %d entries in %d pages, %d general, %d owned (meta gaps %d)\n",
+               scanned, pages, count, own_count, missing_meta);
     return count;
 }
 
@@ -1016,10 +1072,12 @@ static void lock(void) { sceKernelWaitSema(api_lock, 1, NULL); }
 static void unlock(void) { sceKernelSignalSema(api_lock, 1); }
 
 int spotify_sp_playlists(const char *client_token, const char *access_token,
-                         const char *username, spotify_playlist *out, int max)
+                         const char *username, spotify_playlist *out, int max,
+                         spotify_playlist *owned, int owned_max, int *owned_count)
 {
     lock();
-    int r = sp_playlists_unlocked(client_token, access_token, username, out, max);
+    int r = sp_playlists_unlocked(client_token, access_token, username,
+                                  out, max, owned, owned_max, owned_count);
     unlock();
     return r;
 }
