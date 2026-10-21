@@ -749,12 +749,24 @@ static int sp_playlists_unlocked(const char *client_token, const char *access_to
         const uint8_t *contents = NULL;
         size_t contents_len = 0;
         if (pb_find_bytes(resp_buf, len, 5, &contents, &contents_len) < 0) break;
-        int n_items = 0, n_metas = 0;
+        /* Some servers return fewer than requested even though further
+         * pages exist. Use rootlist total length and the truncated bit,
+         * rather than only comparing n_items with ROOT_PAGE. */
+        int total_in_root = -1, truncated = 0;
         pb_reader r;
         pb_field field;
+        pb_init(&r, resp_buf, len);
+        while (pb_next(&r, &field) == 1)
+            if (field.field == 2 && field.wire == 0) {
+                total_in_root = (int)field.varint;
+                break;
+            }
+        int n_items = 0, n_metas = 0;
         pb_init(&r, contents, contents_len);
         while (pb_next(&r, &field) == 1) {
-            if (field.field == 3 && field.wire == 2 && n_items < ROOT_PAGE) {
+            if (field.field == 2 && field.wire == 0) {
+                truncated = field.varint != 0;
+            } else if (field.field == 3 && field.wire == 2 && n_items < ROOT_PAGE) {
                 const uint8_t *uri;
                 size_t uri_len;
                 if (pb_find_bytes(field.data, field.len, 1, &uri, &uri_len) < 0) {
@@ -802,7 +814,11 @@ static int sp_playlists_unlocked(const char *client_token, const char *access_to
         scanned += n_items;
         ++pages;
         offset += n_items;
-        if (n_items < ROOT_PAGE) break;
+        if (total_in_root >= 0) {
+            if (offset >= total_in_root) break;
+        } else if (!truncated && n_items < ROOT_PAGE) {
+            break;
+        }
     }
     *owned_count = own_count;
     log_printf("LIBRARY: rootlist %d entries in %d pages, %d general, %d owned (meta gaps %d)\n",
