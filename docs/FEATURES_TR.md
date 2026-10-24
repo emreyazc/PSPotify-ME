@@ -1,6 +1,6 @@
 # PSPotify ME — Özellikler ve Kullanım Kılavuzu (Türkçe)
 
-> Bu belge `master` üzerindeki doğrulanmış özellikleri ve `feature/player-ui-polish` dalındaki yeni oynatıcı tasarımını anlatır. Yeni Arşiv mini oynatıcısı PSP-3000 üzerinde `UI-03..07` testlerinden geçti. Kompakt üst menü ve yenilenen Şimdi Çalıyor ekranı ise henüz PSP'de test edilmedi. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
+> Bu belge PSP-3000 üzerinde doğrulanan Arşiv mini oynatıcısı (`UI-03..07`) ile kompakt üst menü (`NAV-01`) ve yenilenen Şimdi Çalıyor ekranının (`NOW-01..02`) özelliklerini anlatır. Gerçek PSP fotoğraflarında belirgin bir hizalama/taşma sorunu görülmedi. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
 
 ## Müzik arşivi ve gezinme
 
@@ -89,4 +89,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Tek mini oynatıcılı Arşiv görünümü `UI-03..07` testleri ve fotoğraf kontrolünde **PASS** aldı. Yeni kompakt kategori menüsü ve Şimdi Çalıyor Klasik tasarımı henüz gerçek PSP'de doğrulanmadı. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Tek mini oynatıcılı Arşiv görünümü `UI-03..07` testleri ve fotoğraf kontrolünde **PASS** aldı. Kompakt kategori menüsü `NAV-01`, yenilenen Şimdi Çalıyor Klasik tasarımı ve kontrolleri `NOW-01..02` testlerinde **PASS** aldı; yeni Şimdi Çalıyor ekranının gerçek PSP fotoğrafı ayrıca incelendi. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
