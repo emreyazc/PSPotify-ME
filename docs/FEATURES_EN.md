@@ -2,6 +2,12 @@
 
 > This document covers PSP-3000 validated Archive mini-player (`UI-03..07`), compact category navigation (`NAV-01`), and redesigned Classic Now Playing layout (`NOW-01..02`). Actual PSP photos were visually checked for clipping/alignment. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
 
+## Constant mini-player space and selectable build fonts
+
+Browse-list geometry is constant whether music is playing or not. The bottom 44px Archive or 34px normal mini-player space is **always reserved**, showing an idle **Nothing playing** message when there is no track. Starting or stopping music does not shrink the list or move its rows.
+
+Fonts are selected **at build time**, not in Settings: **Inter** by default, **Noto Sans** via `PSPOTIFY_FONT=noto`, or the original **M PLUS Rounded 1c** via `PSPOTIFY_FONT=mplus`. Three actual static weights with Turkish glyphs (`ÇçĞğİıÖöŞşÜü`) are subset and linked to the EBOOT; only one family is included at a time. For the Docker build pass `-e PSPOTIFY_FONT=noto`. The fixed player and these font builds still require real PSP hardware testing.
+
 ## Music library and navigation
 
 - **Liked Songs:** Browse and play saved tracks from your Spotify library.
