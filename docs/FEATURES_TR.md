@@ -2,6 +2,12 @@
 
 > Bu belge PSP-3000 üzerinde doğrulanan Arşiv mini oynatıcısı (`UI-03..07`) ile kompakt üst menü (`NAV-01`) ve yenilenen Şimdi Çalıyor ekranının (`NOW-01..02`) özelliklerini anlatır. Gerçek PSP fotoğraflarında belirgin bir hizalama/taşma sorunu görülmedi. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
 
+## Font seçimi ve sabit mini oynatıcı
+
+Şarkı çalarken ve hiçbir şarkı açık değilken liste yüksekliği **sabit** kalır. Arşiv Görünümü'nde alttaki 44 piksellik, diğer gezinme bölümlerinde 34 piksellik mini oynatıcı alanı daima ayrılır. Şarkı yokken burada **Bir şey çalmıyor** mesajı yer alır; şarkı başladığında liste satırları küçülüp kaymaz.
+
+Font karşılaştırması derleme aşamasındadır: varsayılan **Inter**; alternatif **Noto Sans** veya eski **M PLUS Rounded 1c**. Fontlar Türkçe `ÇçĞğİıÖöŞşÜü` harflerini içerir ve üç gerçek ağırlıkta küçültülüp PSP uygulamasına gömülür. Noto Sans için derlerken Docker'a `-e PSPOTIFY_FONT=noto` parametresi eklenir. Bu uygulama içinden değiştirilen bir ayar değildir; her seçimden sonra yeniden derleme gerekir. **Yeni sabit oynatıcı ve fontlar PSP cihazında henüz test edilmedi.**
+
 ## Müzik arşivi ve gezinme
 
 - **Beğenilen Şarkılar:** Spotify kütüphanesindeki beğenilen parçaları açar ve oynatır.
