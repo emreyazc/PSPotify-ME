@@ -23,7 +23,7 @@
 | Text only | Single-column text rows with no artwork |
 | **Archive View** | **Up to 20 entries per page, two columns of ten, no list artwork** |
 
-**Archive View** uses the same compact visual style in Liked Songs, Playlists, My Playlists and within playlists. Entry numbers 1–10 appear in the left column and 11–20 on the right. Advancing the selection beyond the last entry of a 20-item page displays the next page. **Up/Down keep their existing sequential selection behavior. Left/Right still change categories**—they are not reassigned to column jumping.
+**Archive View** uses the same compact visual style in Liked Songs, **Recently Played**, Playlists, My Playlists and within playlists. Entry numbers 1–10 appear in the left column and 11–20 on the right. Advancing the selection beyond the last entry of a 20-item page displays the next page. **Up/Down keep their existing sequential selection behavior. Left/Right still change categories**—they are not reassigned to column jumping.
 
 The selected row is highlighted. A footer shows the title, position/total and the available details: artist/duration for tracks; owner when available and track count for playlists. Playlist names appear above the entries when a playlist is opened. Current Spotify metadata in this app does **not** provide track album names for the list footer; it does not invent missing metadata or dates.
 
@@ -31,11 +31,11 @@ The selected row is highlighted. A footer shows the title, position/total and th
 
 **Archive View always hides list artwork**, regardless of the separately remembered artwork preference. While Archive View is selected, the artwork setting explains why it cannot be changed; the previous on/off choice is preserved when switching back. The blurred album-cover backdrop is also suppressed outside Now Playing in this mode; theme wallpapers remain independent. The large album art on **Now Playing** is unaffected unless the user explicitly selects the existing *Text only* Now Playing layout.
 
-For this first version, Search, Recently Played, Queue and Settings retain their previous row layout rather than adopting two columns. While Archive View is active, small artwork downloads are still suppressed in those screens.
+Search, Queue and Settings retain their previous row layout rather than adopting two columns. Archive View now also covers Recently Played, so the same two-column layout is used in all five browsing contexts. Small artwork downloads remain suppressed everywhere in Archive mode.
 
 ## SELECT shortcut: Now Playing ↔ previous browsing position
 
-When a track is active, press **SELECT** while browsing to open **Now Playing**. Press **SELECT** again to return to the previous category, the same playlist depth and the same selected item. The app does not discard the browsing selection/scroll state or reload the playlist solely because of this shortcut.
+When a track is active, press **SELECT** while browsing to open **Now Playing**. Press **SELECT** again to return to the previous category and playlist depth. If the currently playing track belongs to that same source list and is among the currently loaded visible entries, selection follows that track (including L/R track changes from Now Playing). Otherwise the old selected item is retained. The shortcut itself never reloads the playlist.
 
 - The shortcut does nothing if there is no active track.
 - **Queue** and **Settings > Categories** retain their existing SELECT-to-move behavior; dragging/reordering takes priority over the shortcut.
@@ -80,4 +80,4 @@ The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback 
 
 ## Scope and validation
 
-The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width; even the footer may need to truncate unusually long metadata. **The new Archive View and SELECT shortcut have not yet been tested on a real PSP.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
+The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The three latest fixes still require real PSP retesting.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
