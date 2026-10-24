@@ -238,9 +238,10 @@ const char *ui_tr(const char *english)
 
 #define SCREEN_W 480
 #define SCREEN_H 272
-#define CAT_BOTTOM 80       /* category icons and the label sit on this line */
-#define CAT_ANCHOR 118      /* x of the selected category's centre */
-#define CAT_SPACING 46
+#define NAV_Y 31            /* compact category tabs below the button hints */
+#define NAV_H 26
+#define NAV_CENTER_X 144    /* focused green chip; neighbours remain small icons */
+#define NAV_ICON_GAP 35
 #define LIST_X 100
 #define LIST_TOP 92
 #define MINI_H 34
@@ -739,26 +740,39 @@ static void draw_top(const ui_state *ui)
     }
 }
 
+/* Compact shared navigation: the focused category has a readable green
+ * label, all others remain uniform 15px icons. This replaces the oversized
+ * selected XMB icon without changing the category order, visibility or
+ * Left/Right navigation. Off-screen neighbours are simply clipped. */
 static void draw_categories(const ui_state *ui)
 {
+    if (ui->cat_count <= 0) return;
     const ui_theme *t = &ui->theme;
+    const int focus = cat_slot(ui, ui->cat);
+    const char *label = ui_tr(cat_names[ui->cat]);
+    const float label_w = font_width(FONT_BOLD, 10, label);
+    const float chip_w = fminf(label_w + 43.0f, 177.0f);
+    const float chip_x = NAV_CENTER_X - chip_w * 0.5f;
+
+    /* Draw quiet neighbour icons first so the active chip has priority.
+     * A symmetric slot layout means hidden categories never leave gaps. */
+    r_clip(8, NAV_Y - 2, SCREEN_W - 16, NAV_H + 4);
     for (int i = 0; i < ui->cat_count; ++i) {
-        const int cat = ui->cat_order[i];
-        float d = (float)i - ui->cat_pos;
-        float s = clampf(1.0f - fabsf(d), 0.0f, 1.0f);
-        int size = (int)(22.0f + 12.0f * s + 0.5f);
-        /* Neighbours step aside so the selected label has room. */
-        float cx = CAT_ANCHOR + d * CAT_SPACING + (d < 0 ? -14.0f : 14.0f) * clampf(fabsf(d), 0.0f, 1.0f);
-        if (cx < -40 || cx > SCREEN_W + 40) continue;
-        float bottom = CAT_BOTTOM - 18.0f * s;
-        font_icon(cat_icons[cat], size, cx - size / 2.0f, bottom - size,
-                  color_fade(t->icons, 0.45f + 0.55f * s));
-        if (s > 0.01f) {
-            float w = font_width(FONT_BOLD, 11, ui_tr(cat_names[cat]));
-            font_draw(FONT_BOLD, 11, cx - w / 2.0f, CAT_BOTTOM - 15, color_fade(t->text, s),
-                      ui_tr(cat_names[cat]));
-        }
+        if (i == focus) continue;
+        const int delta = i - focus;
+        const float x = delta < 0
+            ? chip_x - 23.0f - (float)(-delta - 1) * NAV_ICON_GAP
+            : chip_x + chip_w + 8.0f + (float)(delta - 1) * NAV_ICON_GAP;
+        if (x < 12 || x > SCREEN_W - 27) continue;
+        font_icon(cat_icons[ui->cat_order[i]], 15, x, NAV_Y + 5,
+                  color_fade(t->icons, 0.73f));
     }
+
+    draw_round_rect(chip_x, NAV_Y, chip_w, NAV_H, 9, t->accent);
+    font_icon(cat_icons[ui->cat], 15, chip_x + 10, NAV_Y + 5, t->bg);
+    font_draw_fit(FONT_BOLD, 10, chip_x + 31, NAV_Y + 7,
+                  t->bg, label, chip_w - 38);
+    r_clip(0, 0, 0, 0);
 }
 
 static void draw_cover(r_tex *tex, uint32_t color, int circle, float x, float y, float size,
