@@ -411,6 +411,7 @@ static void apply_style(void)
     ui_style *st = &xmb.style;
     st->density = prefs[PREF_DENSITY];
     st->list_covers = prefs[PREF_LIST_COVERS];
+    st->archive_hide_blurred_cover = prefs[PREF_BACKGROUND] == BACKGROUND_BLURRED_COVER;
     thumbs_enabled = st->list_covers && st->density != UI_DENSITY_ARCHIVE;
     st->text_size = prefs[PREF_TEXT_SIZE];
     st->anim = prefs[PREF_ANIMATIONS];
@@ -2384,6 +2385,7 @@ static void pref_changed(pref_id id)
         break;
     case PREF_BACKGROUND:
         update_backdrop();
+        xmb.style.archive_hide_blurred_cover = prefs[id] == BACKGROUND_BLURRED_COVER;
         if (prefs[id] == BACKGROUND_WALLPAPER && !base_theme.wallpaper[0])
             ui_toast(&xmb, "This theme has no wallpaper");
         else if (prefs[id] == BACKGROUND_BLURRED_COVER && !cover_keep_valid)
