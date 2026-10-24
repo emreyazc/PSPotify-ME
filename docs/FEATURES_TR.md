@@ -1,6 +1,6 @@
 # PSPotify ME — Özellikler ve Kullanım Kılavuzu (Türkçe)
 
-> Bu belge `master` üzerindeki doğrulanmış özellikleri ve `feature/player-ui-polish` dalındaki yeni oynatıcı tasarımını anlatır. Yeni tasarımın PSP cihaz testi henüz yapılmadı. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
+> Bu belge `master` üzerindeki doğrulanmış özellikleri ve `feature/player-ui-polish` dalındaki yeni oynatıcı tasarımını anlatır. Yeni Arşiv mini oynatıcısı PSP-3000 üzerinde `UI-03..07` testlerinden geçti. Kompakt üst menü ve yenilenen Şimdi Çalıyor ekranı ise henüz PSP'de test edilmedi. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
 
 ## Müzik arşivi ve gezinme
 
@@ -76,7 +76,7 @@ Onay tuşu (`✕`/`○`) ayarlardan değiştirilebilir; uygulamadaki onay/geri d
 
 ## Çalma özellikleri ve ses
 
-Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/duraklat, sonraki/önceki parça, ileri/geri sarma, karıştırma, tekrar, kuyruk düzenleme, beğenilenlere ekleme/çıkarma, ses normalizasyonu, ekolayzır ve beş bantlı özel ekolayzır desteklenir. Şimdi Çalıyor ekranında Klasik/Ortalanmış/Yalnızca yazı düzenleri, isteğe bağlı görselleştirici, sanatçı ve şarkı bilgileri bulunur. `Kapak renkleri` aktifken çalınan parçanın kapağı tema rengini etkileyebilir.
+Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/duraklat, sonraki/önceki parça, ileri/geri sarma, karıştırma, tekrar, kuyruk düzenleme, beğenilenlere ekleme/çıkarma, ses normalizasyonu, ekolayzır ve beş bantlı özel ekolayzır desteklenir. Şimdi Çalıyor ekranında Klasik/Ortalanmış/Yalnızca yazı düzenleri ve isteğe bağlı görselleştirici bulunur. **Yeni Klasik düzen** albüm kapağını solda, şarkı/sanatçı/kaynak bilgisini sağda, **Sıradaki** parçasını ayrı geniş satırda gösterir; süre ve ilerleme çubuğu alt kontrollerin üstündedir. Üst kategori menüsü tüm ekranlarda küçük, yatay kaydırılan sekmelerden oluşur; seçili bölüm ince, tema vurgulu (varsayılan yeşil) yuvarlatılmış kutudadır. Kategori sırası ve sol/sağ tuşların işlevi değiştirilmedi. `Kapak renkleri` aktifken çalınan parçanın kapağı tema rengini etkileyebilir.
 
 ## Ağ, ayarlar, kişiselleştirme
 
@@ -89,4 +89,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Yeni tek mini oynatıcılı Arşiv görünümü ise henüz gerçek PSP'de doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Tek mini oynatıcılı Arşiv görünümü `UI-03..07` testleri ve fotoğraf kontrolünde **PASS** aldı. Yeni kompakt kategori menüsü ve Şimdi Çalıyor Klasik tasarımı henüz gerçek PSP'de doğrulanmadı. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
