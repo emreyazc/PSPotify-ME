@@ -16,7 +16,7 @@ A native Spotify client for the PlayStation Portable. Everything runs on the PSP
 
 Requires **Spotify Premium**.
 
-**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). The Archive View and SELECT shortcut on the development branch still require a real-device validation round.
+**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. The latest highlight and SELECT-follow corrections on this development branch still need real-device validation.
 
 <p align="center">
   <a href="https://youtu.be/5UoCwZZf08E">
@@ -63,7 +63,7 @@ Updating from an older version keeps your pairing. More detail, plus troubleshoo
 | ○ | Back | — |
 | □ | Pause / resume (in Search: type a search) | Pause / resume |
 | △ | Song menu: add to queue, save to / remove from Liked Songs. On a playlist: pin it to the top | Shuffle |
-| SELECT | With a song playing: switch to Now Playing, then return to the same list position; in Queue and Settings → Categories it **still moves rows** | Return to previous browsing position |
+| SELECT | With a song playing: switch to Now Playing and return to the playing track in the same source list (or previous selection if not present); in Queue and Settings → Categories it **still moves rows** | Return to previous browsing position / currently playing track |
 | L / R | Tap: previous (restarts after 3 s) / next song. Hold: seek back / forward | Same |
 | START | Quit | Quit |
 
