@@ -1015,7 +1015,7 @@ static void draw_next(const ui_state *ui, float from, float right, float y, floa
     const ui_now *n = &ui->now;
     if (!n->next[0] || right - from < 40) return;
     char next[160];
-    snprintf(next, sizeof next, "Next: %s", n->next);
+    snprintf(next, sizeof next, "%s %s", ui_tr("Next:"), n->next);
     float max_w = right - from;
     float nw = font_width(FONT_REGULAR, 10, next);
     if (nw > max_w) nw = max_w;
