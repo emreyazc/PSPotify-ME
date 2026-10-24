@@ -1,6 +1,6 @@
 # PSPotify ME — Features and User Guide (English)
 
-> This document describes validated features on `master` plus a new player-layout experiment on `feature/player-ui-polish`. The new layout has not yet been tested on a PSP. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
+> This document describes validated features on `master` plus a new player-layout experiment on `feature/player-ui-polish`. The Archive mini-player passed PSP-3000 hardware tests `UI-03..07`; the compact category navigation and refreshed Now Playing screen still await testing. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
 
 ## Music library and navigation
 
@@ -78,7 +78,7 @@ The confirm/back keys can be swapped in Settings, without changing their configu
 
 ## Playback, sound and Now Playing
 
-The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback includes pause/resume, next/previous, seek, shuffle, repeat, queue editing, saving/removing Liked Songs, audio normalization, EQ presets and custom five-band EQ. Now Playing offers Classic/Centered/Text only layouts, an optional visualizer and track metadata. When enabled, **Cover colors** can tint the UI from the playing track’s artwork.
+The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback includes pause/resume, next/previous, seek, shuffle, repeat, queue editing, saving/removing Liked Songs, audio normalization, EQ presets and custom five-band EQ. Now Playing offers Classic/Centered/Text only layouts, an optional visualizer and track metadata. The **refreshed Classic player** places large artwork on the left, song/artist/source metadata on the right, a readable separate **Next:** row, and progress/time above uncluttered controls. The shared category navigation is now a horizontal **compact scrolling tab row**, using a small theme-accent (normally green) pill rather than a large selected XMB icon. Category ordering and Left/Right input remain unchanged. When enabled, **Cover colors** can tint the UI from the playing track’s artwork.
 
 ## Connectivity and personalization
 
@@ -90,4 +90,4 @@ The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback 
 
 ## Scope and validation
 
-The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The newly redesigned Archive mini-player still requires hardware testing.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
+The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The redesigned Archive mini-player passed `UI-03..07` on a PSP-3000; the new category tab bar and refreshed Now Playing Classic player require separate hardware checks.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
