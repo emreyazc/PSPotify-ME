@@ -30,9 +30,9 @@ Pairing only happens once. Later starts refresh the stored token silently.
 
 ## Choosing the browsing layout (development branch)
 
-In **Settings → Appearance**, **List artwork** hides list and mini-player covers when Off and avoids queueing thumbnail downloads. **List style → Archive View** uses two columns of ten for Liked Songs, Playlists, My Playlists and songs inside playlists. In Archive View, list artwork is always hidden even if the saved preference was On; the Now Playing artwork is independent. The album-art blurred background is also suppressed outside Now Playing while Archive View is active.
+In **Settings → Appearance**, **List artwork** hides list and mini-player covers when Off and avoids queueing thumbnail downloads. **List style → Archive View** uses two columns of ten for Liked Songs, Recently Played, Playlists, My Playlists and songs inside playlists. In Archive View, list artwork is always hidden even if the saved preference was On; the Now Playing artwork is independent. The album-art blurred background is also suppressed outside Now Playing while Archive View is active.
 
-When music is playing, **SELECT** switches from browsing to Now Playing; SELECT again restores the previous category, playlist level and selected item. This shortcut is disabled when SELECT is already used to move items (Queue / Settings → Categories). For Turkish and English details, see [FEATURES_TR.md](FEATURES_TR.md) / [FEATURES_EN.md](FEATURES_EN.md).
+When music is playing, **SELECT** switches from browsing to Now Playing; SELECT again restores the previous category and playlist level, focusing the current playing song when it belongs to that same loaded list; otherwise the previous selected item remains. This shortcut is disabled when SELECT is already used to move items (Queue / Settings → Categories). For Turkish and English details, see [FEATURES_TR.md](FEATURES_TR.md) / [FEATURES_EN.md](FEATURES_EN.md).
 
 Settings are stored in `settings.ini`: `list_style = archive` and `list_covers = on/off`. These options are not hardware-validated until the new development build is tested on a PSP.
 
