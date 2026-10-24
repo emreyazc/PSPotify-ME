@@ -2126,7 +2126,7 @@ static void update_archive_details(void)
     xmb.archive_duration_ms = 0;
     const int cat = xmb.cat, level = xmb.level[cat];
     if (prefs[PREF_DENSITY] != UI_DENSITY_ARCHIVE ||
-        (cat != UI_CAT_LIKED && !playlist_cat(cat))) return;
+        (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT && !playlist_cat(cat))) return;
     const ui_list *list = &xmb.lists[cat][level];
     const int selected = xmb.sel[cat][level];
     if (!list->rows || selected < 0 || selected >= list->count) return;
