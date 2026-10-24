@@ -490,6 +490,7 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
                 ui->quick_return_cat < UI_CATS) {
                 ui->cat = ui->quick_return_cat;
                 ui->quick_return_valid = 0;
+                emit(ui, UI_EV_QUICK_RETURN, 0);
             }
         } else if (ui->now.active && cat != UI_CAT_SETTINGS) {
             ui->quick_return_cat = cat;
@@ -567,7 +568,7 @@ static int archive_category(const ui_state *ui, int cat)
 {
     return ui->style.density == UI_DENSITY_ARCHIVE &&
            (cat == UI_CAT_LIKED || cat == UI_CAT_PLAYLISTS ||
-            cat == UI_CAT_MY_PLAYLISTS);
+            cat == UI_CAT_MY_PLAYLISTS || cat == UI_CAT_RECENT);
 }
 
 /* ------------------------------------------------------------ list styles */
@@ -834,8 +835,12 @@ static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha,
     const int level = ui->level[cat];
     const ui_list *list = &ui->lists[cat][level];
     const float footer_y = bottom - 24.0f;
-    const float top = list->header[0] ? 99.0f : 92.0f;
-    float rh = (footer_y - top - 3.0f) / 10.0f;
+    /* The PSP's 480x272 canvas gets only ~12px per archive row with the
+     * mini player visible. Keep the header clear, then centre actual glyph
+     * metrics inside every highlight instead of letting 10px bold text
+     * extend past the selected green rectangle. */
+    const float top = list->header[0] ? 98.0f : 88.0f;
+    float rh = (footer_y - top - 1.0f) / 10.0f;
     if (rh > 14.0f) rh = 14.0f;
     if (alpha < 0.01f) return;
 
@@ -860,15 +865,18 @@ static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha,
         const float x = (column ? 244.0f : 15.0f) + slide;
         const float y = top + (float)line * rh;
         if (idx == selected) {
-            draw_round_rect(x, y, 219, rh - 1, 3,
+            draw_round_rect(x, y, 219, rh - 0.6f, 3,
                             color_fade(t->accent, alpha * 0.38f));
         }
         char ordinal[12];
         snprintf(ordinal, sizeof ordinal, "%d", idx + 1);
-        font_draw(FONT_REGULAR, 9, x + 5, y + 1, color_fade(t->dim, alpha), ordinal);
-        if (r->playing) font_icon(ICON_PLAY, 9, x + 20, y + 1,
+        const int row_font = font_line_height(FONT_REGULAR, 9) <= rh - 0.5f ? 9 : 8;
+        const float text_y = y + (rh - font_line_height(FONT_REGULAR, row_font)) * 0.5f;
+        font_draw(FONT_REGULAR, row_font, x + 5, text_y,
+                  color_fade(t->dim, alpha), ordinal);
+        if (r->playing) font_icon(ICON_PLAY, 9, x + 20, y + (rh - 9.0f) * 0.5f,
                                   color_fade(t->accent, alpha));
-        font_draw_fit(idx == selected ? FONT_BOLD : FONT_REGULAR, 10, x + 37, y + 1,
+        font_draw_fit(FONT_REGULAR, row_font, x + 37, text_y,
                       color_fade(idx == selected ? t->text : r->playing ? t->accent : t->dim,
                                  alpha), r->title, 175);
     }
@@ -1108,6 +1116,7 @@ void ui_prebake(const ui_state *ui)
     }
     if (ui->style.density == UI_DENSITY_ARCHIVE) {
         /* Archive adds 9px text and 10px bold; prepare before the first frame. */
+        font_draw(FONT_REGULAR, 8, 0, 0, 0, "a");
         font_draw(FONT_REGULAR, 9, 0, 0, 0, "a");
         font_draw(FONT_REGULAR, 10, 0, 0, 0, "a");
         font_draw(FONT_BOLD, 10, 0, 0, 0, "a");
