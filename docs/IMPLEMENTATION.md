@@ -116,7 +116,13 @@ The UI core treats SELECT as a quick jump only when a track is active and the cu
 
 For behavior and control documentation see [FEATURES_EN.md](FEATURES_EN.md) and [FEATURES_TR.md](FEATURES_TR.md). The change still needs hardware acceptance testing; static compilation is not hardware proof.
 
-## Verification scope
+## Interface localization
+
+The user-facing UI uses English canonical strings in `ui/xmb.c:ui_tr()` so preference storage, Spotify metadata and themes remain independent of the selected language. `spotify/prefs.c` provides canonical labels and option names; these are translated at the `spotify/ui.c` rendering boundary. `spotify/ui.c:on_status()` now translates the session statuses from `spotify/session.c` without changing the actual authentication protocol. The first-run device pairing screen also looks up its text at draw time and bounds the result to the PSP's 480px width. The Now Playing 'Next:' prefix is localized at render time.
+
+Static source auditing covered literal `ui_tr()` calls, session status literals and user-visible preference names. There are 212 distinct keys with no duplicate English keys in the shared dictionary. Formatted strings are selected through existing English/Turkish format branches where necessary; track and playlist titles remain opaque UTF-8 from Spotify. Preferences continue to write stable language-independent tokens (`language = en/tr`, `list_style = archive`, etc.). Native PSP error/debug output in `main.c` occurs before the full UI/settings bootstraps and is **not** covered by this translator.
+
+## Verification scope## Verification scope
 
 The final local build uses GCC 15.2.0, Windows CMake/Ninja and the MSYS2-hosted
 [pspdev-win v2](https://github.com/dmang-dev/pspdev-win/releases/tag/v2) toolchain.
