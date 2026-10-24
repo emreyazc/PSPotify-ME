@@ -105,14 +105,14 @@ typedef struct ui_menu {
 
 /* How the interface looks, chosen by the host from the user's settings.
  * All zero is the default look. */
-enum { UI_DENSITY_COMFORTABLE, UI_DENSITY_COMPACT, UI_DENSITY_TEXT };
+enum { UI_DENSITY_COMFORTABLE, UI_DENSITY_COMPACT, UI_DENSITY_TEXT, UI_DENSITY_ARCHIVE };
 enum { UI_TEXT_NORMAL, UI_TEXT_SMALL, UI_TEXT_LARGE };
 enum { UI_ANIM_SMOOTH, UI_ANIM_FAST, UI_ANIM_OFF };
 enum { UI_NOW_CLASSIC, UI_NOW_CENTERED, UI_NOW_TEXT };
 enum { UI_LR_BOTH, UI_LR_SEEK, UI_LR_SKIP };
 
 typedef struct ui_style {
-    int density;        /* UI_DENSITY_*: list rows */
+    int density;        /* UI_DENSITY_*: list rows; Archive renders 2 x 10 */
     int list_covers;    /* list artwork and mini-player image; Now Playing unaffected */
     int text_size;      /* UI_TEXT_*: list titles */
     int anim;           /* UI_ANIM_* */
@@ -157,6 +157,11 @@ typedef struct ui_state {
     int event_count;
 
     /* Internal: animation and input state. */
+    /* SELECT toggles Now Playing and this category without resetting list state. */
+    int quick_return_cat, quick_return_valid;
+    /* Selected Archive item details supplied by the host each frame. */
+    char archive_detail[96];
+    unsigned archive_duration_ms;
     float cat_pos, scroll[UI_CATS][2], level_pos[UI_CATS], menu_pos;
     unsigned buttons;
     float repeat_at, lr_held, lr_seek_at;
