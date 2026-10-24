@@ -94,6 +94,8 @@ static spotify_track recent_tracks[MAX_RECENT];
 static ui_row recent_rows[MAX_RECENT];
 static volatile unsigned recent_req_seq, recent_done_seq, recent_shown_seq;
 static volatile int recent_count, recent_error;
+/* SELECT returning from Now Playing must not re-fetch Recent and reset its cursor. */
+static int skip_recent_refresh_once;
 
 /* Search results, loaded the same way. */
 #define MAX_RESULTS 50
@@ -1745,13 +1747,14 @@ static void sync_state(void)
      * without restarting the app. Never shuffle the listening-history order. */
     static int was_recent;
     const int in_recent = xmb.cat == UI_CAT_RECENT;
-    if (in_recent && !was_recent) {
+    if (in_recent && !was_recent && !skip_recent_refresh_once) {
         ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
         l->rows = recent_rows;
         l->count = 0;
         l->loading = 1;
         ++recent_req_seq;
     }
+    skip_recent_refresh_once = 0;
     was_recent = in_recent;
     if (recent_req_seq && recent_done_seq == recent_req_seq &&
         recent_shown_seq != recent_done_seq) {
@@ -2512,11 +2515,11 @@ static void settings_adjust(const ui_event *e)
     save_settings();
 }
 
-/* SELECT returned from Now Playing. When the active track belongs to
- * the exact list that was being browsed, focus that track instead of the old
- * cursor position. Otherwise keep the old selection and scroll untouched.
- * Match IDs rather than queue indices: list sorting and queue shuffle can
- * produce different orders, and the same track may appear more than once. */
+/* SELECT returned from Now Playing: select the track that is actually
+ * playing when it is present in the currently visible source list.
+ * Track IDs, rather than queue indices or source generation keys, are the
+ * invariant: track sorting, shuffling and reloads may change those keys.
+ * If the track is absent, ui_update's saved cursor remains untouched. */
 static void follow_playing_on_quick_return(void)
 {
     const int cat = xmb.cat;
@@ -2524,29 +2527,19 @@ static void follow_playing_on_quick_return(void)
     const ui_list *list = &xmb.lists[cat][level];
     if (!list->rows || list->count <= 0) return;
 
-    int playing = request_index >= 0 ? request_index : current_index;
+    /* Only navigate song rows, not the root playlist catalogue or settings. */
+    if (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT &&
+        cat != UI_CAT_SEARCH && !playlist_cat(cat)) return;
+    if (playlist_cat(cat) && level != 1) return;
+
+    /* current_index is the audible/now-playing track; request_index can
+     * be the next requested track that has not started yet. */
+    const int playing = current_index;
     if (playing < 0 || playing >= queue_len || !queue[playing].id[0]) return;
 
-    if (cat == UI_CAT_LIKED) {
-        if (level != 0 || queue_key != -1) return;
-    } else if (playlist_cat(cat)) {
-        /* Root rows contain playlists, not tracks. The opened buffer
-         * belongs to only one playlist category at a time. */
-        if (level != 1 || cat != open_source_cat ||
-            open_shown_seq != open_done_seq ||
-            queue_key != open_done_playlist) return;
-    } else if (cat == UI_CAT_RECENT) {
-        if (level != 0 || recent_shown_seq != recent_done_seq ||
-            queue_key != -2000 - (int)recent_done_seq) return;
-    } else if (cat == UI_CAT_SEARCH) {
-        if (level != 0 || search_shown_seq != search_done_seq ||
-            queue_key != -10 - (int)search_done_seq) return;
-    } else {
-        return;
-    }
-
     const int old = xmb.sel[cat][level];
-    int best = -1, best_distance = list->count + 1;
+    int best = -1;
+    int best_distance = list->count + 1;
     for (int i = 0; i < list->count; ++i) {
         const spotify_track *candidate = row_track(cat, level, i);
         if (!candidate || strcmp(candidate->id, queue[playing].id)) continue;
@@ -2570,6 +2563,7 @@ static int handle(const ui_event *e)
         return 1;
     case UI_EV_QUICK_RETURN:
         follow_playing_on_quick_return();
+        if (e->category == UI_CAT_RECENT) skip_recent_refresh_once = 1;
         break;
     case UI_EV_OPEN:
         if (e->category == UI_CAT_LIKED && liked_shown > 0) {
