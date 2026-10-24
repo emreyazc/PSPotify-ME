@@ -484,16 +484,30 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
             /* Queue and Settings > Categories keep their existing SELECT behaviour. */
             ui->moving = 1;
         } else if (cat == UI_CAT_NOW) {
-            /* Restore the actual browsing state: level, selection and scroll
-             * never changed while Now Playing was on screen. */
             if (ui->quick_return_valid && ui->quick_return_cat >= 0 &&
                 ui->quick_return_cat < UI_CATS) {
-                ui->cat = ui->quick_return_cat;
+                const int back = ui->quick_return_cat;
+                /* Preserve the actual cursor as fallback; the host will then
+                 * focus the playing song when it belongs to that list. */
+                if (ui->level[back] == ui->quick_return_level) {
+                    const int level = ui->quick_return_level;
+                    const ui_list *back_list = &ui->lists[back][level];
+                    if (back_list->count > 0) {
+                        int index = ui->quick_return_sel;
+                        if (index >= back_list->count) index = back_list->count - 1;
+                        if (index < 0) index = 0;
+                        ui->sel[back][level] = index;
+                        ui->scroll[back][level] = (float)index;
+                    }
+                }
+                ui->cat = back;
                 ui->quick_return_valid = 0;
                 emit(ui, UI_EV_QUICK_RETURN, 0);
             }
         } else if (ui->now.active && cat != UI_CAT_SETTINGS) {
             ui->quick_return_cat = cat;
+            ui->quick_return_level = lvl;
+            ui->quick_return_sel = *sel;
             ui->quick_return_valid = 1;
             ui->cat = UI_CAT_NOW;
         }
