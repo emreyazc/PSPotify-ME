@@ -162,9 +162,8 @@ typedef struct ui_state {
     /* SELECT toggles Now Playing and this category without resetting list state. */
     int quick_return_cat, quick_return_valid;
     int quick_return_level, quick_return_sel; /* fallback even if a view resets its cursor */
-    /* Selected Archive item details supplied by the host each frame. */
-    char archive_detail[96];
-    unsigned archive_duration_ms;
+    /* Total Spotify collection size; may exceed currently loaded Archive rows. */
+    int archive_total;
     float cat_pos, scroll[UI_CATS][2], level_pos[UI_CATS], menu_pos;
     unsigned buttons;
     float repeat_at, lr_held, lr_seek_at;
