@@ -12,6 +12,16 @@
 - **Son Dinlenenler:** Gerçek şarkı geçmişini son dinlenenden başlayarak gösterir; tekrar ziyaret edildiğinde yenileme yapılır. Spotify tarafındaki değişiklikler gecikmeli gelebilir.
 - **Sıradakiler/Kuyruk:** Yaklaşan şarkıları görüntüler, şarkı ekleyip çıkarma ve SELECT ile yer değiştirme desteklenir.
 
+## Dil desteği: Türkçe ve İngilizce
+
+`Ayarlar > Görünüm > Dil` bölümünden **Türkçe** veya **English** seçilir. Seçim `settings.ini` içinde `language = tr/en` olarak korunur. Menü adları, ayar seçenekleri, gezinme ipuçları, bildirimler, hata mesajları, liste detayları ve oturum açma/eşleştirme ekranı uygulamanın dil tercihine göre gösterilir. Spotify'dan gelen şarkı, sanatçı, çalma listesi ve tema adları değiştirilmez. PSP'nin kendi ekran klavyesinin dili, PSP sistem ayarlarına da bağlıdır.
+
+24/12 saat seçeneği, yükleme başına 25/50/75/100 şarkı seçenekleri ve Şimdi Çalıyor'daki **Sıradaki:** etiketi de yerelleştirilmiştir. Güncelleme sistemi değiştirilmemiştir; yalnızca mevcut güncelleme **metinleri** çevrilmiştir.
+
+**Kapsam ve doğrulama:** Ortak UI sözlüğünde 212 benzersiz anahtar bulunur. Statik kontrolde `ui_tr()` sabit metinleri, ayar seçenekleri ve Spotify oturum durumlarında eksik karşılık görülmemiştir. Bu sonuç dinamik tüm metinlerin gerçek PSP'de test edildiği anlamına gelmez. Grafik arayüzü açılmadan önceki düşük seviyeli PSP/Media Engine teşhis ve kurtarma ekranları İngilizce kalır; bunların dil tercihi henüz yüklenmemiş olabilir.
+
+**Kısa cihaz testleri:** (1) Türkçe'yi seç, uygulamayı yeniden aç, Hakkında, Şimdi Çalıyor ve şarkı yükleme seçeneklerini kontrol et. (2) Spotify eşleştirme ekranı yalnızca ilk oturumda görünür; tekrar eşleştirmeye zorlamadan önce bunun oturum dosyasını etkileyebileceğini unutma. (3) English'e dönüp aynı ekranların İngilizce ve taşmasız göründüğünü kontrol et. (4) Birkaç uzun Türkçe çalma listesi adında taşma olmadığına bak.
+
 ## Liste biçimi ve görseller
 
 `Ayarlar > Görünüm > Liste biçimi`:
