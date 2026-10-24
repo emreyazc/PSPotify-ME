@@ -308,7 +308,7 @@ static void frame_message(const char *line1, const char *line2)
 
 static void on_status(const char *message)
 {
-    frame_message(message, NULL);
+    frame_message(ui_tr(message), NULL);
 }
 
 static void on_pair_code(const char *code)
@@ -321,10 +321,16 @@ static void on_pair_code(const char *code)
         "Pair this PSP with your Spotify account",
         "On a phone or computer, open spotify.com/pair and enter:",
     };
-    float w = font_width(FONT_BOLD, 15, lines[0]);
-    font_draw(FONT_BOLD, 15, (480 - w) / 2, 70, t->text, lines[0]);
-    w = font_width(FONT_REGULAR, 12, lines[1]);
-    font_draw(FONT_REGULAR, 12, (480 - w) / 2, 96, t->dim, lines[1]);
+    /* Translate at render time: the user's selected language is already
+     * loaded here. Fit longer Turkish lines to the PSP's 480px display. */
+    const char *title = ui_tr(lines[0]);
+    const char *instruction = ui_tr(lines[1]);
+    float w = font_width(FONT_BOLD, 15, title);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_BOLD, 15, (480.0f - w) / 2, 70, t->text, title, 440.0f);
+    w = font_width(FONT_REGULAR, 12, instruction);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_REGULAR, 12, (480.0f - w) / 2, 96, t->dim, instruction, 440.0f);
 
     /* One rounded box per character of the code. */
     const int n = (int)strlen(code), box = 34, gap = 8;
@@ -335,9 +341,11 @@ static void on_pair_code(const char *code)
         float cw = font_width(FONT_XBOLD, 20, ch);
         font_draw(FONT_XBOLD, 20, x + (box - cw) / 2, 137, t->text, ch);
     }
-    w = font_width(FONT_REGULAR, 12, "Waiting for approval\xE2\x80\xA6 (only once)");
-    font_draw(FONT_REGULAR, 12, (480 - w) / 2, 196, t->dim,
-              "Waiting for approval\xE2\x80\xA6 (only once)");
+    const char *waiting = ui_tr("Waiting for approval\xE2\x80\xA6 (only once)");
+    w = font_width(FONT_REGULAR, 12, waiting);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_REGULAR, 12, (480.0f - w) / 2, 196, t->dim,
+                  waiting, 440.0f);
     render_gu_end();
 }
 
@@ -2932,8 +2940,8 @@ int spotify_ui_run(volatile int *exit_requested)
     int ret = spotify_ctx_start(&ctx, &hooks);
     if (ret < 0) {
         frame_message(ui_tr("Could not sign in to Spotify"), log_enabled()
-                      ? "See spotify.log. START: exit"
-                      : "debug = on in settings.ini logs it. START: exit");
+                      ? ui_tr("See spotify.log. START: exit")
+                      : ui_tr("debug = on in settings.ini logs it. START: exit"));
         SceCtrlData pad;
         do {
             sceCtrlPeekBufferPositive(&pad, 1);
