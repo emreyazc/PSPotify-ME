@@ -2135,10 +2135,20 @@ static void update_archive_details(void)
 {
     xmb.archive_detail[0] = '\0';
     xmb.archive_duration_ms = 0;
+    xmb.archive_total = 0;
     const int cat = xmb.cat, level = xmb.level[cat];
     if (prefs[PREF_DENSITY] != UI_DENSITY_ARCHIVE ||
         (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT && !playlist_cat(cat))) return;
     const ui_list *list = &xmb.lists[cat][level];
+    /* Display the actual collection size, not just the currently loaded
+     * 25/50/75/100-song page. No extra network request is needed. */
+    int total = list->count;
+    if (cat == UI_CAT_LIKED && liked_count > total)
+        total = liked_count;
+    else if (playlist_cat(cat) && level == 1 && cat == open_source_cat &&
+             open_done_seq == open_req_seq && open_total_count > total)
+        total = open_total_count;
+    xmb.archive_total = total;
     const int selected = xmb.sel[cat][level];
     if (!list->rows || selected < 0 || selected >= list->count) return;
 
