@@ -106,6 +106,16 @@ and shell-quoting failures when generating the dependency archives.
 No firmware mapping is invented or changed. Exception handlers, custom reset
 cores, VME, DMACPLUS, task threads and pools are not included in the application.
 
+## Archive View and list artwork implementation
+
+The native PSP UI owns render state in `ui/ui.h` / `ui/xmb.c`; `spotify/ui.c` owns playlist and track metadata. `PREF_DENSITY = UI_DENSITY_ARCHIVE` is a fourth list style serialized as `list_style = archive`. It uses the existing `ui_state.sel[category][level]` and list rows: indices 0–9 draw in column one, 10–19 in column two, with each 20-item page determined by `selection / 20`. This preserves the existing **Up/Down sequential navigation**, **Left/Right category switching**, and opened-playlist level. Archive selection, list names and footer information reuse existing data; the per-track in-memory row buffers are not expanded to cache album names.
+
+`PREF_LIST_COVERS` persists as `list_covers = on/off`; effective thumbnail work is disabled if it is Off **or** if Archive View is active. The thumbnail worker checks this state, clears unused textures on transitions and avoids queueing new work. The now-playing cover thread remains independent. The mini-player cover and blurred cover backdrop are suppressed in Archive View; theme wallpapers and Now Playing artwork are not changed.
+
+The UI core treats SELECT as a quick jump only when a track is active and the current list does not already reserve SELECT for moving/reordering. While moving queue rows or Settings category rows, existing SELECT semantics take precedence. The shortcut saves a category ID; individual per-category level, selection and scroll fields never change during the jump, so they naturally survive a return from Now Playing. It is intentionally available for all list styles, not only Archive View. The music-playing state is independent of browsing focus.
+
+For behavior and control documentation see [FEATURES_EN.md](FEATURES_EN.md) and [FEATURES_TR.md](FEATURES_TR.md). The change still needs hardware acceptance testing; static compilation is not hardware proof.
+
 ## Verification scope
 
 The final local build uses GCC 15.2.0, Windows CMake/Ninja and the MSYS2-hosted
