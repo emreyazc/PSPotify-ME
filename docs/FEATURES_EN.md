@@ -1,6 +1,6 @@
 # PSPotify ME — Features and User Guide (English)
 
-> This document describes validated features on `master` plus a new player-layout experiment on `feature/player-ui-polish`. The Archive mini-player passed PSP-3000 hardware tests `UI-03..07`; the compact category navigation and refreshed Now Playing screen still await testing. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
+> This document covers PSP-3000 validated Archive mini-player (`UI-03..07`), compact category navigation (`NAV-01`), and redesigned Classic Now Playing layout (`NOW-01..02`). Actual PSP photos were visually checked for clipping/alignment. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
 
 ## Music library and navigation
 
@@ -90,4 +90,4 @@ The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback 
 
 ## Scope and validation
 
-The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The redesigned Archive mini-player passed `UI-03..07` on a PSP-3000; the new category tab bar and refreshed Now Playing Classic player require separate hardware checks.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
+The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The redesigned Archive mini-player passed `UI-03..07` on a PSP-3000; the compact category bar passed `NAV-01`, and the refreshed Now Playing Classic layout and controls passed `NOW-01..02` on the PSP-3000. The final Now Playing hardware photograph was also reviewed.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
