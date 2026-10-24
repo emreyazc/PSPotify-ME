@@ -145,6 +145,7 @@ const char *ui_tr(const char *english)
         { "Comfortable", "Rahat" },
         { "Compact", "Sıkışık" },
         { "Text only", "Yalnızca yazı" },
+        { "Archive View", "Arşiv Görünümü" },
         { "Smooth", "Akıcı" },
         { "Fast", "Hızlı" },
         { "Hidden", "Gizli" },
@@ -310,6 +311,7 @@ int ui_init(ui_state *ui)
     theme_defaults(&ui->theme);
     ui->theme_target = ui->theme;
     ui->volume = 80;
+    ui->quick_return_cat = -1;
     ui->style.list_covers = 1; /* Keep the existing look for preview clients. */
     for (int i = 0; i < UI_CATS; ++i) ui->cat_order[i] = i;
     ui->cat_count = UI_CATS;
@@ -558,9 +560,11 @@ static list_style style_for(const ui_state *ui, int search)
         { { 20, 36, 13, 15, 0 }, { 18, 34, 12, 14, 0 } },     /* text only */
     };
     int d = ui->style.density;
+    if (d == UI_DENSITY_ARCHIVE) d = UI_DENSITY_TEXT;
     if (d < 0 || d > 2) d = 0;
     list_style st = base[d][search ? 1 : 0];
-    st.covers = st.covers && ui->style.list_covers;
+    st.covers = st.covers && ui->style.list_covers &&
+                ui->style.density != UI_DENSITY_ARCHIVE;
     if (ui->style.text_size == UI_TEXT_SMALL) {
         st.title_small -= 1;
         st.title_big -= 1;
