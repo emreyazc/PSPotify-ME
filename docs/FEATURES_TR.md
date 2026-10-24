@@ -33,7 +33,7 @@ Arama, Kuyruk ve Ayarlar, mevcut XMB satır yerleşimini korur. Arşiv modu etki
 
 ## SELECT ile Şimdi Çalıyor ↔ kaldığın liste
 
-Müzik çalıyorken Beğenilen Şarkılar, Listeler, Benim Listelerim, liste içi, Arama ve Son Dinlenenler gibi gezinme ekranlarında **SELECT** tuşuna basınca **Şimdi Çalıyor** açılır. **SELECT** tekrar basıldığında daha önceki kategoriye ve aynı liste seviyesine geri dönülür. Çalan parça **o listeye aitse ve görünür/yüklenmiş kayıtlarda bulunuyorsa**, seçim o an çalan parçaya kaydırılır (L/R ile değiştirilen parça da takip edilir). Çalan parça o listede bulunmuyorsa veya başka listeden oynuyorsa önceki seçim korunur. Sadece kısayol için liste yeniden yüklenmez.
+Müzik çalıyorken Beğenilen Şarkılar, Listeler, Benim Listelerim, liste içi, Arama ve Son Dinlenenler gibi gezinme ekranlarında **SELECT** tuşuna basınca **Şimdi Çalıyor** açılır. **SELECT** tekrar basıldığında daha önceki kategoriye ve aynı liste seviyesine geri dönülür. Çalan parça **dönülen listenin görünür/yüklenmiş kayıtlarında bulunuyorsa**, seçim o an gerçekten çalan parçaya kaydırılır (L/R ile değiştirilen parça da takip edilir). Oynatılıyor simgesi 7. şarkıdaysa imleç de 7. şarkıya gelir. Çalan şarkı listede bulunmuyorsa **SELECT öncesindeki imleç konumu** korunur; kuyruğun sıra numarasına veya eski çalma kaynağı anahtarına güvenilmez. Son Dinlenenler'den SELECT ile dönüşte dinleme geçmişi gereksiz yere yeniden yüklenerek seçim sıfırlanmaz.
 
 - Çalan bir şarkı yoksa hızlı geçiş tetiklenmez.
 - **Kuyruk** ve **Ayarlar > Kategoriler** ekranında SELECT'in mevcut öğe taşıma işlevi her zaman önceliklidir; bu işlev **değiştirilmedi**.
@@ -79,4 +79,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. Son düzeltmeler henüz tekrar PSP'de doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi ve yeşil seçim kutusu hizası **PASS** aldı; SELECT dönüşünde güncel parçaya odaklanmama **FAIL** verdi. Bu son soruna yönelik ek yama henüz gerçek PSP'de tekrar doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
