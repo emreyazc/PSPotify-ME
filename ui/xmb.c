@@ -1000,33 +1000,37 @@ static void draw_seek_bar(const ui_state *ui, float x, float y, float w, float a
               color_fade(t->dim, alpha), dur);
 }
 
-/* Previous, play/pause, next, shuffle and repeat around centre line cy;
- * returns the x where the row ends. */
-static float draw_controls(const ui_state *ui, float x, float cy, float alpha)
+/* Compact classic-player controls: the centre action is emphasized
+ * without enlarging the category navigation. All PSP buttons and event
+ * handlers retain their established mappings. */
+static void draw_controls(const ui_state *ui, float x, float cy, float alpha)
 {
     const ui_theme *t = &ui->theme;
     const ui_now *n = &ui->now;
     font_icon(ICON_SKIP_BACK, 20, x, cy - 10, color_fade(t->text, alpha));
-    draw_round_rect(x + 38, cy - 19, 38, 38, 19, color_fade(t->accent, alpha));
-    font_icon(n->paused ? ICON_PLAY : ICON_PAUSE, 16, x + 49, cy - 8, color_fade(t->bg, alpha));
-    font_icon(ICON_SKIP_FORWARD, 20, x + 94, cy - 10, color_fade(t->text, alpha));
-    /* Shuffle and repeat, lit in the accent color when on. */
-    font_icon(ICON_SHUFFLE, 16, x + 126, cy - 8, color_fade(n->shuffle ? t->accent : t->dim, alpha));
-    font_icon(n->repeat == 2 ? ICON_REPEAT_ONE : ICON_REPEAT, 16, x + 150, cy - 8,
+    draw_round_rect(x + 34, cy - 20, 40, 40, 20, color_fade(t->accent, alpha));
+    font_icon(n->paused ? ICON_PLAY : ICON_PAUSE, 17, x + 45, cy - 9,
+              color_fade(t->bg, alpha));
+    font_icon(ICON_SKIP_FORWARD, 20, x + 88, cy - 10, color_fade(t->text, alpha));
+    font_icon(ICON_SHUFFLE, 17, x + 126, cy - 8,
+              color_fade(n->shuffle ? t->accent : t->dim, alpha));
+    font_icon(n->repeat == 2 ? ICON_REPEAT_ONE : ICON_REPEAT, 17, x + 161, cy - 8,
               color_fade(n->repeat ? t->accent : t->dim, alpha));
-    return x + 176;
+    /* Audio is adjusted with Up/Down, so this is a status glyph only. */
+    font_icon(ui->volume > 0 ? ICON_VOLUME : ICON_VOLUME_MUTE, 17, x + 228,
+              cy - 8, color_fade(t->dim, alpha));
 }
 
-static void draw_next(const ui_state *ui, float from, float right, float y, float alpha)
+static void draw_next(const ui_state *ui, float x, float y, float width, float alpha)
 {
     const ui_now *n = &ui->now;
-    if (!n->next[0] || right - from < 40) return;
-    char next[160];
-    snprintf(next, sizeof next, "%s %s", ui_tr("Next:"), n->next);
-    float max_w = right - from;
-    float nw = font_width(FONT_REGULAR, 10, next);
-    if (nw > max_w) nw = max_w;
-    font_draw_fit(FONT_REGULAR, 10, right - nw, y, color_fade(ui->theme.dim, alpha), next, max_w);
+    if (!n->next[0] || width < 60.0f) return;
+    const char *label = ui_tr("Next:");
+    const float label_w = font_draw(FONT_BOLD, 10, x, y,
+                                    color_fade(ui->theme.accent, alpha), label);
+    font_draw_fit(FONT_REGULAR, 10, x + label_w + 6, y,
+                  color_fade(ui->theme.text, alpha), n->next,
+                  width - label_w - 8);
 }
 
 static void draw_now_centered(const ui_state *ui, float alpha, float slide)
@@ -1092,25 +1096,30 @@ static void draw_now(const ui_state *ui, float alpha, float slide)
         return;
     }
     const int text_only = ui->style.now_layout == UI_NOW_TEXT;
-    const float cx = 30 + slide, cy = 92, size = text_only ? 0.0f : 150.0f;
+    const float cx = (text_only ? 0.0f : 19.0f) + slide;
+    const float cy = 83.0f, size = text_only ? 0.0f : 156.0f;
     if (!text_only) draw_cover(n->cover, n->color, 0, cx, cy, size, alpha, 1);
 
-    const float x = text_only ? 40 + slide : cx + size + 18, w = SCREEN_W - 24 - x;
-    const int title = text_only ? 24 : 20, artist = text_only ? 15 : 13, album = text_only ? 12 : 11;
-    float y = cy;
-    font_draw_fit(FONT_XBOLD, title, x, y, color_fade(t->text, alpha), n->title, w);
-    y += font_line_height(FONT_XBOLD, title) + 2;
-    font_draw_fit(FONT_REGULAR, artist, x, y, color_fade(color_mix(t->dim, t->text, 0.5f), alpha),
+    /* Keep room for the album art while giving Next: its own readable line. */
+    const float x = (text_only ? 28.0f : 197.0f) + slide;
+    const float w = SCREEN_W - 18.0f - x + slide;
+    const int title = text_only ? 22 : 18;
+    const int artist = text_only ? 15 : 13;
+    const int album = text_only ? 12 : 11;
+    font_draw_fit(FONT_XBOLD, title, x, 87, color_fade(t->text, alpha),
+                  n->title, w);
+    font_draw_fit(FONT_REGULAR, artist, x, 116,
+                  color_fade(color_mix(t->dim, t->text, 0.5f), alpha),
                   n->artist, w);
-    y += font_line_height(FONT_REGULAR, artist);
-    font_draw_fit(FONT_REGULAR, album, x, y, color_fade(t->dim, alpha),
+    font_draw_fit(FONT_REGULAR, album, x, 138, color_fade(t->dim, alpha),
                   n->loading ? ui_tr("Loading\xE2\x80\xA6") : n->album, w);
+    draw_next(ui, x, 167, w, alpha);
 
-    draw_seek_bar(ui, x, 200, w, alpha);
-    const float end = draw_controls(ui, x, 241, alpha);
+    draw_seek_bar(ui, x, 195, w, alpha);
+    draw_controls(ui, x, 243, alpha);
     if (n->remote)
-        font_icon(ICON_CAST, 14, x + w - 14, cy - 2, color_fade(t->accent, alpha));
-    draw_next(ui, end, x + w, 241 - 6, alpha);
+        font_icon(ICON_CAST, 14, x + w - 14, 85,
+                  color_fade(t->accent, alpha));
 }
 
 /* Archive mode uses one compact, information-rich player. Reuse the
