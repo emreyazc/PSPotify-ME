@@ -17,6 +17,26 @@ const char *ui_tr(const char *english)
     if (!english || !ui_language) return english;
     static const struct { const char *en, *tr; } messages[] = {
         { "Search", "Ara" },
+        { "Pair this PSP with your Spotify account", "PSP'yi Spotify hesabınla eşleştir" },
+        { "On a phone or computer, open spotify.com/pair and enter:", "Telefonda/PC'de spotify.com/pair aç, kodu gir:" },
+        { "Waiting for approval… (only once)", "Onay bekleniyor… (yalnızca bir kez)" },
+        { "Pairing with Spotify...", "Spotify ile eşleştiriliyor…" },
+        { "Signing in...", "Oturum açılıyor…" },
+        { "Sign-in failed (no stored credentials)", "Oturum açılamadı (kayıtlı bilgi yok)" },
+        { "Connecting to Spotify...", "Spotify'a bağlanılıyor…" },
+        { "Spotify login failed", "Spotify oturumu açılamadı" },
+        { "Could not get an access token", "Erişim anahtarı alınamadı" },
+        { "See spotify.log. START: exit", "spotify.log dosyasına bak. START: çıkış" },
+        { "debug = on in settings.ini logs it. START: exit", "Günlük için debug = on yap. START: çıkış" },
+        { "Checking for updates…", "Güncellemeler kontrol ediliyor…" },
+        { "Next:", "Sıradaki:" },
+        { "24-hour", "24 saat" },
+        { "12-hour", "12 saat" },
+        { "Circle", "Daire" },
+        { "25 songs", "25 şarkı" },
+        { "50 songs", "50 şarkı" },
+        { "75 songs", "75 şarkı" },
+        { "100 songs", "100 şarkı" },
         { "%d results", "%d sonuç" },
         { "Install now", "Şimdi yükle" },
         { "Not now", "Şimdi değil" },
@@ -53,7 +73,6 @@ const char *ui_tr(const char *english)
         { "Updated: the new version starts next time", "Güncellendi: yeni sürüm sonraki açılışta başlar" },
         { "The PSP turns off when the timer ends", "Sayaç bitince PSP kapanır" },
         { "Playback pauses when the timer ends", "Sayaç bitince oynatma duraklar" },
-        { "This theme has no wallpaper", "Bu temada duvar kâğıdı yok" },
 
         { "Recent", "Son Dinlenenler" },
         { "Liked Songs", "Beğenilen Şarkılar" },
@@ -62,7 +81,6 @@ const char *ui_tr(const char *english)
         { "Now Playing", "Şimdi Çalıyor" },
         { "Queue", "Çalma Kuyruğu" },
         { "Settings", "Ayarlar" },
-        { "Play", "Çal" },
         { "Pause", "Duraklat" },
         { "Open", "Aç" },
         { "Back", "Geri" },
@@ -110,6 +128,7 @@ const char *ui_tr(const char *english)
         { "Cover shape", "Kapak şekli" },
         { "Text size", "Yazı boyutu" },
         { "List style", "Liste biçimi" },
+        { "List artwork", "Liste görselleri" },
         { "Animations", "Animasyonlar" },
         { "Clock", "Saat" },
         { "Button hints", "Tuş ipuçları" },
@@ -137,13 +156,14 @@ const char *ui_tr(const char *english)
         { "Theme wallpaper", "Tema duvar kâğıdı" },
         { "Square", "Kare" },
         { "Rounded", "Yuvarlatılmış" },
-        { "Circle", "Daire" },
         { "Normal", "Normal" },
         { "Small", "Küçük" },
         { "Large", "Büyük" },
         { "Comfortable", "Rahat" },
         { "Compact", "Sıkışık" },
         { "Text only", "Yalnızca yazı" },
+        { "Archive View", "Arşiv Görünümü" },
+        { "Archive View always hides list artwork", "Arşiv Görünümü liste kapaklarını gizler" },
         { "Smooth", "Akıcı" },
         { "Fast", "Hızlı" },
         { "Hidden", "Gizli" },
@@ -180,7 +200,6 @@ const char *ui_tr(const char *english)
         { "Up to date", "Güncel" },
         { "Always shown", "Her zaman görünür" },
         { "Installed", "Yüklü" },
-        { "Select to download", "İndirmek için seç" },
         { "Select to check for updates", "Güncelleme kontrolü için seç" },
         { "Couldn't reach the theme site", "Tema sitesine ulaşılamadı" },
         { "Check the Wi-Fi · select to try again", "Wi-Fi kontrol et · yeniden denemek için seç" },
@@ -196,10 +215,6 @@ const char *ui_tr(const char *english)
         { "Couldn't update Liked Songs", "Beğenilenler güncellenemedi" },
         { "Still saving the last change", "Önceki değişiklik kaydediliyor" },
         { "Still busy, try again in a moment", "Şu an meşgul, birazdan tekrar dene" },
-        { "Theme installed", "Tema yüklendi" },
-        { "Couldn't download the theme", "Tema indirilemedi" },
-        { "Couldn't check for updates", "Güncellemeler kontrol edilemedi" },
-        { "Update failed, nothing changed", "Güncelleme başarısız; değişiklik yapılmadı" },
         { "Settings stays, so you can come back", "Geri dönebilmen için Ayarlar görünür kalır" },
         { "The new version starts next time", "Yeni sürüm sonraki açılışta başlayacak" },
         { "Up to 16 pins", "En fazla 16 sabitleme" },
@@ -309,6 +324,8 @@ int ui_init(ui_state *ui)
     theme_defaults(&ui->theme);
     ui->theme_target = ui->theme;
     ui->volume = 80;
+    ui->quick_return_cat = -1;
+    ui->style.list_covers = 1; /* Keep the existing look for preview clients. */
     for (int i = 0; i < UI_CATS; ++i) ui->cat_order[i] = i;
     ui->cat_count = UI_CATS;
     ui->cat = UI_CAT_PLAYLISTS;
@@ -474,7 +491,39 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
         ui->menu.level = lvl;
         ui->menu.index = *sel;
     }
-    if ((pressed & UI_BTN_SELECT) && list->movable && list->count > 0) ui->moving = 1;
+    if (pressed & UI_BTN_SELECT) {
+        if (list->movable && list->count > 0) {
+            /* Queue and Settings > Categories keep their existing SELECT behaviour. */
+            ui->moving = 1;
+        } else if (cat == UI_CAT_NOW) {
+            if (ui->quick_return_valid && ui->quick_return_cat >= 0 &&
+                ui->quick_return_cat < UI_CATS) {
+                const int back = ui->quick_return_cat;
+                /* Preserve the actual cursor as fallback; the host will then
+                 * focus the playing song when it belongs to that list. */
+                if (ui->level[back] == ui->quick_return_level) {
+                    const int level = ui->quick_return_level;
+                    const ui_list *back_list = &ui->lists[back][level];
+                    if (back_list->count > 0) {
+                        int index = ui->quick_return_sel;
+                        if (index >= back_list->count) index = back_list->count - 1;
+                        if (index < 0) index = 0;
+                        ui->sel[back][level] = index;
+                        ui->scroll[back][level] = (float)index;
+                    }
+                }
+                ui->cat = back;
+                ui->quick_return_valid = 0;
+                emit(ui, UI_EV_QUICK_RETURN, 0);
+            }
+        } else if (ui->now.active && cat != UI_CAT_SETTINGS) {
+            ui->quick_return_cat = cat;
+            ui->quick_return_level = lvl;
+            ui->quick_return_sel = *sel;
+            ui->quick_return_valid = 1;
+            ui->cat = UI_CAT_NOW;
+        }
+    }
     if (pressed & UI_BTN_START) emit(ui, UI_EV_QUIT, 0);
 
     /* L/R: a tap changes track and holding seeks, or only one of the two. */
@@ -539,6 +588,15 @@ static void animate(ui_state *ui, float dt)
     }
 }
 
+/* Archive mode is deliberately a distinct renderer, not a denser version
+ * of the XMB rows.  The existing directional/category controls are unchanged. */
+static int archive_category(const ui_state *ui, int cat)
+{
+    return ui->style.density == UI_DENSITY_ARCHIVE &&
+           (cat == UI_CAT_LIKED || cat == UI_CAT_PLAYLISTS ||
+            cat == UI_CAT_MY_PLAYLISTS || cat == UI_CAT_RECENT);
+}
+
 /* ------------------------------------------------------------ list styles */
 
 typedef struct list_style {
@@ -556,8 +614,11 @@ static list_style style_for(const ui_state *ui, int search)
         { { 20, 36, 13, 15, 0 }, { 18, 34, 12, 14, 0 } },     /* text only */
     };
     int d = ui->style.density;
+    if (d == UI_DENSITY_ARCHIVE) d = UI_DENSITY_TEXT;
     if (d < 0 || d > 2) d = 0;
     list_style st = base[d][search ? 1 : 0];
+    st.covers = st.covers && ui->style.list_covers &&
+                ui->style.density != UI_DENSITY_ARCHIVE;
     if (ui->style.text_size == UI_TEXT_SMALL) {
         st.title_small -= 1;
         st.title_big -= 1;
@@ -791,6 +852,85 @@ static void draw_list(const ui_state *ui, const ui_list *list, float scroll, flo
     r_clip(0, 0, 0, 0);
 }
 
+/* 20 entries/page: 1..10 on the left, 11..20 on the right.  Up/Down
+ * continue through those indices in order; Left/Right remain category keys.
+ * Paging follows the selected index without changing selection or scroll. */
+static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha, float slide)
+{
+    const ui_theme *t = &ui->theme;
+    const int level = ui->level[cat];
+    const ui_list *list = &ui->lists[cat][level];
+    const float footer_y = bottom - 24.0f;
+    /* The PSP's 480x272 canvas gets only ~12px per archive row with the
+     * mini player visible. Keep the header clear, then centre actual glyph
+     * metrics inside every highlight instead of letting 10px bold text
+     * extend past the selected green rectangle. */
+    const float top = list->header[0] ? 98.0f : 88.0f;
+    float rh = (footer_y - top - 1.0f) / 10.0f;
+    if (rh > 14.0f) rh = 14.0f;
+    if (alpha < 0.01f) return;
+
+    if (list->header[0])
+        font_draw_fit(FONT_BOLD, 10, 16 + slide, 82, color_fade(t->text, alpha),
+                      list->header, SCREEN_W - 30);
+    if (list->count <= 0) {
+        font_draw(FONT_REGULAR, 12, 20 + slide, top + 8, color_fade(t->dim, alpha),
+                  ui_tr(list->loading ? "Loading\xE2\x80\xA6" : "Nothing here yet"));
+        return;
+    }
+
+    int selected = ui->sel[cat][level];
+    if (selected < 0) selected = 0;
+    if (selected >= list->count) selected = list->count - 1;
+    const int page_start = (selected / 20) * 20;
+    r_clip(10, (int)top - 1, SCREEN_W - 18, (int)(footer_y - top));
+    for (int cell = 0; cell < 20 && page_start + cell < list->count; ++cell) {
+        const int idx = page_start + cell;
+        const ui_row *r = &list->rows[idx];
+        const int column = cell / 10, line = cell % 10;
+        const float x = (column ? 244.0f : 15.0f) + slide;
+        const float y = top + (float)line * rh;
+        if (idx == selected) {
+            draw_round_rect(x, y, 219, rh - 0.6f, 3,
+                            color_fade(t->accent, alpha * 0.38f));
+        }
+        char ordinal[12];
+        snprintf(ordinal, sizeof ordinal, "%d", idx + 1);
+        const int row_font = font_line_height(FONT_REGULAR, 9) <= rh - 0.5f ? 9 : 8;
+        const float text_y = y + (rh - font_line_height(FONT_REGULAR, row_font)) * 0.5f;
+        font_draw(FONT_REGULAR, row_font, x + 5, text_y,
+                  color_fade(t->dim, alpha), ordinal);
+        if (r->playing) font_icon(ICON_PLAY, 9, x + 20, y + (rh - 9.0f) * 0.5f,
+                                  color_fade(t->accent, alpha));
+        font_draw_fit(FONT_REGULAR, row_font, x + 37, text_y,
+                      color_fade(idx == selected ? t->text : r->playing ? t->accent : t->dim,
+                                 alpha), r->title, 175);
+    }
+    r_clip(0, 0, 0, 0);
+
+    /* Text-only details of the selected item; no extra metadata fetches. */
+    const ui_row *selected_row = &list->rows[selected];
+    draw_round_rect(12, footer_y, SCREEN_W - 24, 22, 5,
+                    color_fade(t->surface, alpha));
+    char position[24];
+    snprintf(position, sizeof position, "%d/%d", selected + 1, list->count);
+    font_draw_fit(FONT_BOLD, 10, 20, footer_y + 1, color_fade(t->text, alpha),
+                  selected_row->title, SCREEN_W - 120);
+    font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
+              font_width(FONT_REGULAR, 9, position), footer_y + 3,
+              color_fade(t->accent, alpha), position);
+    const char *detail = ui->archive_detail[0] ? ui->archive_detail : selected_row->subtitle;
+    font_draw_fit(FONT_REGULAR, 9, 20, footer_y + 12, color_fade(t->dim, alpha),
+                  detail, SCREEN_W - 135);
+    if (ui->archive_duration_ms) {
+        char duration[16];
+        format_time(ui->archive_duration_ms, duration, sizeof duration);
+        font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
+                  font_width(FONT_REGULAR, 9, duration), footer_y + 13,
+                  color_fade(t->dim, alpha), duration);
+    }
+}
+
 static void draw_levels(const ui_state *ui, int cat, float x, float top, float bottom,
                         const list_style *st, float alpha, float slide)
 {
@@ -875,7 +1015,7 @@ static void draw_next(const ui_state *ui, float from, float right, float y, floa
     const ui_now *n = &ui->now;
     if (!n->next[0] || right - from < 40) return;
     char next[160];
-    snprintf(next, sizeof next, "Next: %s", n->next);
+    snprintf(next, sizeof next, "%s %s", ui_tr("Next:"), n->next);
     float max_w = right - from;
     float nw = font_width(FONT_REGULAR, 10, next);
     if (nw > max_w) nw = max_w;
@@ -973,7 +1113,8 @@ static void draw_mini(const ui_state *ui)
     const float y = SCREEN_H - MINI_H;
     r_rect(0, y, SCREEN_W, MINI_H, t->player_bar);
     draw_progress(ui, 0, y, SCREEN_W, 2, 1.0f);
-    draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
+    if (ui->style.list_covers && ui->style.density != UI_DENSITY_ARCHIVE)
+        draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
 
     char span[48], pos[16], dur[16];
     format_time(n->pos_ms, pos, sizeof pos);
@@ -984,7 +1125,7 @@ static void draw_mini(const ui_state *ui)
     right -= 10 + font_width(FONT_REGULAR, 10, span);
     font_draw(FONT_REGULAR, 10, right, y + 10, t->dim, n->loading ? "" : span);
 
-    float x = 42;
+    float x = ui->style.list_covers && ui->style.density != UI_DENSITY_ARCHIVE ? 42.0f : 12.0f;
     float tw = font_draw_fit(FONT_BOLD, 12, x, y + 9, t->text, n->title, right - x - 80);
     font_draw_fit(FONT_REGULAR, 11, x + tw + 8, y + 10, t->dim, n->artist, right - (x + tw + 8) - 12);
 }
@@ -999,6 +1140,14 @@ void ui_prebake(const ui_state *ui)
         font_draw(FONT_REGULAR, st.title_small, 0, 0, 0, "a");
         font_draw(FONT_XBOLD, st.title_big, 0, 0, 0, "a");
     }
+    if (ui->style.density == UI_DENSITY_ARCHIVE) {
+        /* Archive adds 9px text and 10px bold; prepare before the first frame. */
+        font_draw(FONT_REGULAR, 8, 0, 0, 0, "a");
+        font_draw(FONT_REGULAR, 9, 0, 0, 0, "a");
+        font_draw(FONT_REGULAR, 10, 0, 0, 0, "a");
+        font_draw(FONT_BOLD, 10, 0, 0, 0, "a");
+        font_icon(ICON_PLAY, 9, 0, 0, 0);
+    }
     if (ui->style.now_layout == UI_NOW_CENTERED) font_draw(FONT_XBOLD, 17, 0, 0, 0, "a");
     if (ui->style.now_layout == UI_NOW_TEXT) {
         font_draw(FONT_XBOLD, 24, 0, 0, 0, "a");
@@ -1010,7 +1159,8 @@ void ui_draw(const ui_state *ui)
 {
     const ui_theme *t = &ui->theme;
     r_clip(0, 0, 0, 0);
-    if (ui->style.backdrop) {
+    if (ui->style.backdrop && !(ui->style.density == UI_DENSITY_ARCHIVE &&
+                                 ui->cat != UI_CAT_NOW && ui->style.archive_hide_blurred_cover)) {
         int w, h;
         r_tex_size(ui->style.backdrop, &w, &h);
         r_tex_draw(ui->style.backdrop, 0, 0, (float)w, (float)h, 0, 0, SCREEN_W, SCREEN_H, 0xFFFFFFFFu);
@@ -1035,8 +1185,12 @@ void ui_draw(const ui_state *ui)
         draw_now(ui, alpha, slide);
         break;
     default: {
-        const list_style st = style_for(ui, 0);
-        draw_levels(ui, ui->cat, LIST_X, LIST_TOP, bottom, &st, alpha, slide);
+        if (archive_category(ui, ui->cat))
+            draw_archive(ui, ui->cat, bottom, alpha, slide);
+        else {
+            const list_style st = style_for(ui, 0);
+            draw_levels(ui, ui->cat, LIST_X, LIST_TOP, bottom, &st, alpha, slide);
+        }
         break;
     }
     }

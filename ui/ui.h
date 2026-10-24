@@ -83,6 +83,7 @@ typedef enum {
     UI_EV_REPEAT,       /* ✕ on Now Playing */
     UI_EV_MENU,         /* value: chosen menu item; category, level, index: its row */
     UI_EV_MOVE,         /* value: -1 or +1; index: the row before it moved */
+    UI_EV_QUICK_RETURN, /* SELECT returned from Now Playing: host may follow playing track */
     UI_EV_ADJUST,       /* value: -1 or +1: ←/→ or ✕ (+1) on a row of an adjustable list */
     UI_EV_QUIT
 } ui_event_type;
@@ -105,14 +106,16 @@ typedef struct ui_menu {
 
 /* How the interface looks, chosen by the host from the user's settings.
  * All zero is the default look. */
-enum { UI_DENSITY_COMFORTABLE, UI_DENSITY_COMPACT, UI_DENSITY_TEXT };
+enum { UI_DENSITY_COMFORTABLE, UI_DENSITY_COMPACT, UI_DENSITY_TEXT, UI_DENSITY_ARCHIVE };
 enum { UI_TEXT_NORMAL, UI_TEXT_SMALL, UI_TEXT_LARGE };
 enum { UI_ANIM_SMOOTH, UI_ANIM_FAST, UI_ANIM_OFF };
 enum { UI_NOW_CLASSIC, UI_NOW_CENTERED, UI_NOW_TEXT };
 enum { UI_LR_BOTH, UI_LR_SEEK, UI_LR_SKIP };
 
 typedef struct ui_style {
-    int density;        /* UI_DENSITY_*: list rows */
+    int density;        /* UI_DENSITY_*: list rows; Archive renders 2 x 10 */
+    int list_covers;    /* list artwork and mini-player image; Now Playing unaffected */
+    int archive_hide_blurred_cover; /* archive mode never draws blurred album art */
     int text_size;      /* UI_TEXT_*: list titles */
     int anim;           /* UI_ANIM_* */
     int hide_hints;     /* no button hints in the top bar */
@@ -156,6 +159,12 @@ typedef struct ui_state {
     int event_count;
 
     /* Internal: animation and input state. */
+    /* SELECT toggles Now Playing and this category without resetting list state. */
+    int quick_return_cat, quick_return_valid;
+    int quick_return_level, quick_return_sel; /* fallback even if a view resets its cursor */
+    /* Selected Archive item details supplied by the host each frame. */
+    char archive_detail[96];
+    unsigned archive_duration_ms;
     float cat_pos, scroll[UI_CATS][2], level_pos[UI_CATS], menu_pos;
     unsigned buttons;
     float repeat_at, lr_held, lr_seek_at;

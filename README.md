@@ -4,17 +4,19 @@
 
 A native Spotify client for the PlayStation Portable. Everything runs on the PSP itself — no PC, phone app or proxy in the loop. The second CPU, the **Media Engine**, decodes the music while the main CPU handles the network and the interface.
 
-- **XMB-style interface** drawn by the PSP's graphics chip at 60 fps: categories across the top, smooth lists, album covers everywhere.
-- **Search**, **Recently played**, **Liked Songs** and your **playlists**.
+- **XMB-style interface** drawn by the PSP's graphics chip: categories across the top, smooth lists, and optional artwork. A dense two-column **Archive View** can show 20 cover-free items on one screen.
+- **Search**, **Recently played**, **Liked Songs**, **playlists**, and a separate **My Playlists** view with pinning and sorting.
 - A **queue**: add songs with △, reorder them with SELECT; save and remove **Liked Songs** from the same menu.
 - **Full tracks** (Ogg Vorbis 160 kbps), streamed: long tracks play through a small buffer instead of filling the RAM.
 - **Seek** (hold L/R), **shuffle**, **repeat**, and an **equalizer that runs on the Media Engine**.
 - **Themes** you can write in a text file, and **Cover colors**: the theme takes its color from the album art. Make one in the **[theme editor](https://luxotick.github.io/PSPotify-ME/)** in your browser.
-- **Make it yours** in Settings: a wallpaper or the blurred album cover behind everything, round or circular covers, compact or text-only lists, three Now Playing layouts, a visualizer, your own equalizer curve, the same loudness for every song, a sleep timer, ○ as confirm, and more.
+- **Make it yours** in Settings: list artwork on/off (suppresses downloads), an Archive View with two columns of ten, compact and text-only lists, Turkish/English language, a wallpaper or blurred album-cover backdrop, round/circular covers, three Now Playing layouts, a visualizer, equalizer, sleep timer, ○ as confirm, and more.
 - Signs in once by pairing at **spotify.com/pair** (like a smart TV), then refreshes silently.
 - **TLS 1.2** on the PSP through a bundled BearSSL: the firmware's SSL stops at TLS 1.0, and every Spotify endpoint requires TLS 1.2.
 
 Requires **Spotify Premium**.
+
+**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment and corrected SELECT follow-track navigation passed PSP-3000 tests. Newly completed Turkish/English translations still need a separate hardware check.
 
 <p align="center">
   <a href="https://youtu.be/5UoCwZZf08E">
@@ -61,7 +63,7 @@ Updating from an older version keeps your pairing. More detail, plus troubleshoo
 | ○ | Back | — |
 | □ | Pause / resume (in Search: type a search) | Pause / resume |
 | △ | Song menu: add to queue, save to / remove from Liked Songs. On a playlist: pin it to the top | Shuffle |
-| SELECT | In Queue and Settings → Categories: pick a row up, then ↑/↓ to move it | — |
+| SELECT | With a song playing: switch to Now Playing and return to the currently playing track if present in the loaded list (or the saved selection otherwise); in Queue and Settings → Categories it **still moves rows** | Return to previous browsing position / currently playing track |
 | L / R | Tap: previous (restarts after 3 s) / next song. Hold: seek back / forward | Same |
 | START | Quit | Quit |
 
@@ -73,8 +75,8 @@ In Settings, ✕ or ← / → changes the selected option. **Settings → Contro
 |---|---|
 | Themes | The color theme (see below) |
 | Theme gallery | Download a theme from the [theme site](https://luxotick.github.io/PSPotify-ME/) and switch to it |
-| Appearance | Cover colors; background: plain, a blurred copy of the album cover, or the theme's wallpaper; cover shape (square, rounded, circle); text size; list style (comfortable, compact, text only); animations (smooth, fast, off); 12/24-hour clock; button hints; a visualizer on Now Playing |
-| Layout | Start screen; Now Playing layout (classic, centered, text only); playlist order (Spotify's, by name, by size) |
+| Appearance | Cover colors; background: plain, blurred cover, or theme wallpaper; cover shape; text size; list style (comfortable, compact, text only, **Archive View**); list artwork on/off; animations; clock; button hints; a visualizer on Now Playing |
+| Layout | Start screen; Now Playing layout (classic, centered, text only); playlist order (Spotify's, by name, by size); song order (newest, oldest, title, artist); songs per load (25/50/75/100) |
 | Categories | Reorder (SELECT, ↑/↓) or hide (✕) the categories across the top |
 | Sound | Equalizer presets or your own five bands; same loudness for every song (Spotify's normalization values) |
 | Playback | Sleep timer, which pauses or turns the PSP off when it ends; battery saver (fewer frames while idle); CPU speed |

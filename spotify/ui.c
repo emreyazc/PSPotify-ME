@@ -94,6 +94,8 @@ static spotify_track recent_tracks[MAX_RECENT];
 static ui_row recent_rows[MAX_RECENT];
 static volatile unsigned recent_req_seq, recent_done_seq, recent_shown_seq;
 static volatile int recent_count, recent_error;
+/* SELECT returning from Now Playing must not re-fetch Recent and reset its cursor. */
+static int skip_recent_refresh_once;
 
 /* Search results, loaded the same way. */
 #define MAX_RESULTS 50
@@ -120,6 +122,8 @@ static volatile int request_index = -1;
 static volatile int current_index = -1;
 static volatile play_state_t play_state = PS_IDLE;
 static volatile int player_quit;
+/* The UI and thumbnail worker share this; playback cover downloads are separate. */
+static volatile int thumbs_enabled = 1;
 static volatile int me_dead;
 static volatile int last_error;    /* why the last track could not play */
 
@@ -304,7 +308,7 @@ static void frame_message(const char *line1, const char *line2)
 
 static void on_status(const char *message)
 {
-    frame_message(message, NULL);
+    frame_message(ui_tr(message), NULL);
 }
 
 static void on_pair_code(const char *code)
@@ -317,10 +321,16 @@ static void on_pair_code(const char *code)
         "Pair this PSP with your Spotify account",
         "On a phone or computer, open spotify.com/pair and enter:",
     };
-    float w = font_width(FONT_BOLD, 15, lines[0]);
-    font_draw(FONT_BOLD, 15, (480 - w) / 2, 70, t->text, lines[0]);
-    w = font_width(FONT_REGULAR, 12, lines[1]);
-    font_draw(FONT_REGULAR, 12, (480 - w) / 2, 96, t->dim, lines[1]);
+    /* Translate at render time: the user's selected language is already
+     * loaded here. Fit longer Turkish lines to the PSP's 480px display. */
+    const char *title = ui_tr(lines[0]);
+    const char *instruction = ui_tr(lines[1]);
+    float w = font_width(FONT_BOLD, 15, title);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_BOLD, 15, (480.0f - w) / 2, 70, t->text, title, 440.0f);
+    w = font_width(FONT_REGULAR, 12, instruction);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_REGULAR, 12, (480.0f - w) / 2, 96, t->dim, instruction, 440.0f);
 
     /* One rounded box per character of the code. */
     const int n = (int)strlen(code), box = 34, gap = 8;
@@ -331,9 +341,11 @@ static void on_pair_code(const char *code)
         float cw = font_width(FONT_XBOLD, 20, ch);
         font_draw(FONT_XBOLD, 20, x + (box - cw) / 2, 137, t->text, ch);
     }
-    w = font_width(FONT_REGULAR, 12, "Waiting for approval\xE2\x80\xA6 (only once)");
-    font_draw(FONT_REGULAR, 12, (480 - w) / 2, 196, t->dim,
-              "Waiting for approval\xE2\x80\xA6 (only once)");
+    const char *waiting = ui_tr("Waiting for approval\xE2\x80\xA6 (only once)");
+    w = font_width(FONT_REGULAR, 12, waiting);
+    if (w > 440.0f) w = 440.0f;
+    font_draw_fit(FONT_REGULAR, 12, (480.0f - w) / 2, 196, t->dim,
+                  waiting, 440.0f);
     render_gu_end();
 }
 
@@ -408,6 +420,9 @@ static void apply_style(void)
 {
     ui_style *st = &xmb.style;
     st->density = prefs[PREF_DENSITY];
+    st->list_covers = prefs[PREF_LIST_COVERS];
+    st->archive_hide_blurred_cover = prefs[PREF_BACKGROUND] == BACKGROUND_BLURRED_COVER;
+    thumbs_enabled = st->list_covers && st->density != UI_DENSITY_ARCHIVE;
     st->text_size = prefs[PREF_TEXT_SIZE];
     st->anim = prefs[PREF_ANIMATIONS];
     st->hide_hints = prefs[PREF_HINTS];
@@ -732,6 +747,11 @@ static void fill_options(void)
             memset(r, 0, sizeof *r);
             copy_text(r->title, sizeof r->title, ui_tr(d->label));
             copy_text(r->subtitle, sizeof r->subtitle, ui_tr(pref_value_name((pref_id)i)));
+            if (i == PREF_LIST_COVERS && prefs[PREF_DENSITY] == UI_DENSITY_ARCHIVE) {
+                copy_text(r->subtitle, sizeof r->subtitle,
+                          ui_tr("Archive View always hides list artwork"));
+                r->color = 0xFF3A3F4Au;
+            }
             if (i == PREF_BACKGROUND && prefs[i] == BACKGROUND_WALLPAPER && !base_theme.wallpaper[0])
                 copy_text(r->subtitle, sizeof r->subtitle, ui_tr("Theme wallpaper (this theme has none)"));
             if (i == PREF_SLEEP && prefs[i] && sleep_deadline) {
@@ -1410,7 +1430,7 @@ static void forget_texture(const r_tex *tex)
 /* The texture for url if it is loaded; otherwise queues it. UI thread. */
 static r_tex *thumb_for(const char *url, int priority)
 {
-    if (!url[0] || thumb_lock < 0) return NULL;
+    if (!thumbs_enabled || !url[0] || thumb_lock < 0) return NULL;
     sceKernelWaitSema(thumb_lock, 1, NULL);
     r_tex *tex = NULL;
     int hit = -1, victim = -1;
@@ -1447,6 +1467,24 @@ static r_tex *thumb_for(const char *url, int priority)
     return tex;
 }
 
+/* Called on the UI thread when artwork is disabled.  Release cached GPU
+ * textures and cancel pending requests, without affecting Now Playing. */
+static void clear_thumbs(void)
+{
+    if (thumb_lock < 0) return;
+    sceKernelWaitSema(thumb_lock, 1, NULL);
+    for (int i = 0; i < THUMB_SLOTS; ++i) {
+        thumb_slot *s = &thumbs[i];
+        if (s->tex) {
+            forget_texture(s->tex);
+            r_tex_destroy(s->tex);
+        }
+        memset(s, 0, sizeof *s);
+    }
+    thumb_px_slot = -1;
+    sceKernelSignalSema(thumb_lock, 1);
+}
+
 /* Turns a downloaded thumbnail into a texture. UI thread. */
 static void upload_thumb(void)
 {
@@ -1470,6 +1508,10 @@ static int thumb_thread(SceSize args, void *argp)
     static uint32_t scaled[THUMB * THUMB];
     static char url[160];
     while (!player_quit) {
+        if (!thumbs_enabled) {
+            sceKernelDelayThread(30000);
+            continue;
+        }
         int slot = -1;
         sceKernelWaitSema(thumb_lock, 1, NULL);
         /* Only rows on screen now that have stayed there a moment; the one
@@ -1491,15 +1533,25 @@ static int thumb_thread(SceSize args, void *argp)
             sceKernelDelayThread(30000);
             continue;
         }
+        /* A setting change may have disabled artwork after selection. */
+        if (!thumbs_enabled) continue;
         if (fetch_image(url, jpeg, sizeof jpeg, scaled, THUMB) < 0) {
             sceKernelWaitSema(thumb_lock, 1, NULL);
-            thumbs[slot].state = THUMB_FAILED;
+            if (thumbs[slot].state == THUMB_LOADING && !strcmp(thumbs[slot].url, url))
+                thumbs[slot].state = THUMB_FAILED;
             sceKernelSignalSema(thumb_lock, 1);
             continue;
         }
-        while (thumb_px_slot >= 0 && !player_quit) sceKernelDelayThread(5000);
-        memcpy(thumb_px, scaled, sizeof thumb_px);
-        thumb_px_slot = slot;
+        while (thumb_px_slot >= 0 && !player_quit && thumbs_enabled)
+            sceKernelDelayThread(5000);
+        if (!thumbs_enabled || player_quit) continue;
+        sceKernelWaitSema(thumb_lock, 1, NULL);
+        if (thumbs_enabled && thumbs[slot].state == THUMB_LOADING &&
+            !strcmp(thumbs[slot].url, url)) {
+            memcpy(thumb_px, scaled, sizeof thumb_px);
+            thumb_px_slot = slot;
+        }
+        sceKernelSignalSema(thumb_lock, 1);
     }
     return 0;
 }
@@ -1513,7 +1565,7 @@ static void assign_thumbs(void)
     if (cat != UI_CAT_LIKED && !playlist_cat(cat) && cat != UI_CAT_SEARCH &&
         cat != UI_CAT_RECENT && cat != UI_CAT_QUEUE)
         return;
-    if (prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;     /* no covers to show */
+    if (!thumbs_enabled || prefs[PREF_DENSITY] == UI_DENSITY_TEXT) return;
     for (int lvl = 0; lvl < 2; ++lvl) {
         ui_list *list = &xmb.lists[cat][lvl];
         if (!list->rows || list->count <= 0 || (cat == UI_CAT_RECENT && lvl != 0)) continue;
@@ -1703,13 +1755,14 @@ static void sync_state(void)
      * without restarting the app. Never shuffle the listening-history order. */
     static int was_recent;
     const int in_recent = xmb.cat == UI_CAT_RECENT;
-    if (in_recent && !was_recent) {
+    if (in_recent && !was_recent && !skip_recent_refresh_once) {
         ui_list *l = &xmb.lists[UI_CAT_RECENT][0];
         l->rows = recent_rows;
         l->count = 0;
         l->loading = 1;
         ++recent_req_seq;
     }
+    skip_recent_refresh_once = 0;
     was_recent = in_recent;
     if (recent_req_seq && recent_done_seq == recent_req_seq &&
         recent_shown_seq != recent_done_seq) {
@@ -2076,6 +2129,43 @@ static const spotify_track *row_track(int cat, int level, int i)
     return NULL;
 }
 
+/* Update Archive footer from metadata we already have, without extra
+ * network requests or enlarging the per-row buffers in PSP RAM. */
+static void update_archive_details(void)
+{
+    xmb.archive_detail[0] = '\0';
+    xmb.archive_duration_ms = 0;
+    const int cat = xmb.cat, level = xmb.level[cat];
+    if (prefs[PREF_DENSITY] != UI_DENSITY_ARCHIVE ||
+        (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT && !playlist_cat(cat))) return;
+    const ui_list *list = &xmb.lists[cat][level];
+    const int selected = xmb.sel[cat][level];
+    if (!list->rows || selected < 0 || selected >= list->count) return;
+
+    if (playlist_cat(cat) && level == 0) {
+        const int pidx = cat == UI_CAT_MY_PLAYLISTS
+                       ? my_playlist_view[selected] : playlist_view[selected];
+        const spotify_playlist *p = &playlists[pidx];
+        if (p->owner[0] && p->total >= 0)
+            snprintf(xmb.archive_detail, sizeof xmb.archive_detail,
+                     prefs[PREF_LANGUAGE] ? "Sahibi: %.50s · %d şarkı"
+                                          : "Owner: %.50s · %d songs",
+                     p->owner, p->total);
+        else if (p->owner[0])
+            snprintf(xmb.archive_detail, sizeof xmb.archive_detail,
+                     prefs[PREF_LANGUAGE] ? "Sahibi: %.70s" : "Owner: %.70s", p->owner);
+        else
+            copy_text(xmb.archive_detail, sizeof xmb.archive_detail,
+                      list->rows[selected].subtitle);
+    } else {
+        const spotify_track *t = row_track(cat, level, selected);
+        if (t) {
+            copy_text(xmb.archive_detail, sizeof xmb.archive_detail, t->artist);
+            xmb.archive_duration_ms = t->duration_ms;
+        }
+    }
+}
+
 static int is_liked(const char *id)
 {
     for (int i = 0; i < liked_count; ++i)
@@ -2306,6 +2396,7 @@ static void pref_changed(pref_id id)
         break;
     case PREF_BACKGROUND:
         update_backdrop();
+        xmb.style.archive_hide_blurred_cover = prefs[id] == BACKGROUND_BLURRED_COVER;
         if (prefs[id] == BACKGROUND_WALLPAPER && !base_theme.wallpaper[0])
             ui_toast(&xmb, "This theme has no wallpaper");
         else if (prefs[id] == BACKGROUND_BLURRED_COVER && !cover_keep_valid)
@@ -2314,9 +2405,13 @@ static void pref_changed(pref_id id)
     case PREF_COVER_SHAPE:
         rebuild_cover();
         break;
+    case PREF_LIST_COVERS:
+    case PREF_DENSITY:
+        apply_style();
+        if (!thumbs_enabled) clear_thumbs();
+        break;
     case PREF_VISUALIZER:
     case PREF_TEXT_SIZE:
-    case PREF_DENSITY:
     case PREF_ANIMATIONS:
     case PREF_HINTS:
     case PREF_NOW_LAYOUT:
@@ -2417,11 +2512,55 @@ static void settings_adjust(const ui_event *e)
         cat_hidden[v] = !cat_hidden[v];
         apply_categories();
     } else {
+        if (v == PREF_LIST_COVERS && prefs[PREF_DENSITY] == UI_DENSITY_ARCHIVE) {
+            ui_toast(&xmb, "Archive View always hides list artwork");
+            return;
+        }
         prefs_step((pref_id)v, e->value < 0 ? -1 : 1);
         pref_changed((pref_id)v);
     }
     fill_settings();
     save_settings();
+}
+
+/* SELECT returned from Now Playing: select the track that is actually
+ * playing when it is present in the currently visible source list.
+ * Track IDs, rather than queue indices or source generation keys, are the
+ * invariant: track sorting, shuffling and reloads may change those keys.
+ * If the track is absent, ui_update's saved cursor remains untouched. */
+static void follow_playing_on_quick_return(void)
+{
+    const int cat = xmb.cat;
+    const int level = xmb.level[cat];
+    const ui_list *list = &xmb.lists[cat][level];
+    if (!list->rows || list->count <= 0) return;
+
+    /* Only navigate song rows, not the root playlist catalogue or settings. */
+    if (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT &&
+        cat != UI_CAT_SEARCH && !playlist_cat(cat)) return;
+    if (playlist_cat(cat) && level != 1) return;
+
+    /* current_index is the audible/now-playing track; request_index can
+     * be the next requested track that has not started yet. */
+    const int playing = current_index;
+    if (playing < 0 || playing >= queue_len || !queue[playing].id[0]) return;
+
+    const int old = xmb.sel[cat][level];
+    int best = -1;
+    int best_distance = list->count + 1;
+    for (int i = 0; i < list->count; ++i) {
+        const spotify_track *candidate = row_track(cat, level, i);
+        if (!candidate || strcmp(candidate->id, queue[playing].id)) continue;
+        const int distance = i > old ? i - old : old - i;
+        if (distance < best_distance) {
+            best = i;
+            best_distance = distance;
+        }
+    }
+    if (best >= 0) {
+        xmb.sel[cat][level] = best;
+        xmb.scroll[cat][level] = (float)best;
+    }
 }
 
 /* Returns 1 when the user asked to quit. */
@@ -2430,6 +2569,10 @@ static int handle(const ui_event *e)
     switch (e->type) {
     case UI_EV_QUIT:
         return 1;
+    case UI_EV_QUICK_RETURN:
+        follow_playing_on_quick_return();
+        if (e->category == UI_CAT_RECENT) skip_recent_refresh_once = 1;
+        break;
     case UI_EV_OPEN:
         if (e->category == UI_CAT_LIKED && liked_shown > 0) {
             static char uri[sizeof ctx.cfg.username + 32];
@@ -2797,8 +2940,8 @@ int spotify_ui_run(volatile int *exit_requested)
     int ret = spotify_ctx_start(&ctx, &hooks);
     if (ret < 0) {
         frame_message(ui_tr("Could not sign in to Spotify"), log_enabled()
-                      ? "See spotify.log. START: exit"
-                      : "debug = on in settings.ini logs it. START: exit");
+                      ? ui_tr("See spotify.log. START: exit")
+                      : ui_tr("debug = on in settings.ini logs it. START: exit"));
         SceCtrlData pad;
         do {
             sceCtrlPeekBufferPositive(&pad, 1);
@@ -2883,6 +3026,7 @@ int spotify_ui_run(volatile int *exit_requested)
         handle_connect();
         maybe_expand_visible_tracks();
         sync_state();
+        update_archive_details();
         report_connect();
         log_tick();
 

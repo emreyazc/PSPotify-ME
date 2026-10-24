@@ -106,7 +106,23 @@ and shell-quoting failures when generating the dependency archives.
 No firmware mapping is invented or changed. Exception handlers, custom reset
 cores, VME, DMACPLUS, task threads and pools are not included in the application.
 
-## Verification scope
+## Archive View and list artwork implementation
+
+The native PSP UI owns render state in `ui/ui.h` / `ui/xmb.c`; `spotify/ui.c` owns playlist and track metadata. `PREF_DENSITY = UI_DENSITY_ARCHIVE` is a fourth list style serialized as `list_style = archive`. It uses the existing `ui_state.sel[category][level]` and list rows: indices 0–9 draw in column one, 10–19 in column two, with each 20-item page determined by `selection / 20`. This preserves the existing **Up/Down sequential navigation**, **Left/Right category switching**, and opened-playlist level. Archive rendering includes Liked Songs, Recently Played, Playlists, My Playlists and opened playlists; only Search, Queue and Settings retain XMB row rendering. Archive selection, list names and footer information reuse existing data; the per-track in-memory row buffers are not expanded to cache album names. The PSP screen leaves about 12px per archive row with the mini-player displayed: the row renderer now chooses a 9px (fallback 8px) font according to `font_line_height()` and vertically centers it within the selection rectangle to avoid glyphs crossing highlight borders.
+
+`PREF_LIST_COVERS` persists as `list_covers = on/off`; effective thumbnail work is disabled if it is Off **or** if Archive View is active. The thumbnail worker checks this state, clears unused textures on transitions and avoids queueing new work. The now-playing cover thread remains independent. The mini-player cover and blurred cover backdrop are suppressed in Archive View; theme wallpapers and Now Playing artwork are not changed.
+
+The UI core treats SELECT as a quick jump only when a track is active and the current list does not already reserve SELECT for moving/reordering. While moving queue rows or Settings category rows, existing SELECT semantics take precedence. The shortcut saves **category, opened level and selected row index** as a fallback while Now Playing is open. On SELECT return, `ui/xmb.c` restores the saved cursor, emits `UI_EV_QUICK_RETURN`, and `spotify/ui.c` searches the returned list's currently loaded rows for the **actually playing** `queue[current_index].id`. It does not rely on `queue_key`, source-generation counters or `request_index`: those can change independently of the actually playing song and previously caused the selection to remain on the wrong row. If a matching track is visible, both `sel` and `scroll` jump to it; otherwise the prior cursor remains. Duplicate track IDs resolve to the nearest matching row. The shortcut also suppresses the otherwise automatic Recently Played re-entry refresh once, preventing the history list and cursor from resetting on a simple SELECT round-trip. Normal navigations to Recently Played still refresh as before. ID matching—not queue position—is necessary because local sorting and shuffle reorder tracks. It is intentionally available for all list styles, not only Archive View. The music-playing state is independent of browsing focus.
+
+For behavior and control documentation see [FEATURES_EN.md](FEATURES_EN.md) and [FEATURES_TR.md](FEATURES_TR.md). The change still needs hardware acceptance testing; static compilation is not hardware proof.
+
+## Interface localization
+
+The user-facing UI uses English canonical strings in `ui/xmb.c:ui_tr()` so preference storage, Spotify metadata and themes remain independent of the selected language. `spotify/prefs.c` provides canonical labels and option names; these are translated at the `spotify/ui.c` rendering boundary. `spotify/ui.c:on_status()` now translates the session statuses from `spotify/session.c` without changing the actual authentication protocol. The first-run device pairing screen also looks up its text at draw time and bounds the result to the PSP's 480px width. The Now Playing 'Next:' prefix is localized at render time.
+
+Static source auditing covered literal `ui_tr()` calls, session status literals and user-visible preference names. There are 212 distinct keys with no duplicate English keys in the shared dictionary. Formatted strings are selected through existing English/Turkish format branches where necessary; track and playlist titles remain opaque UTF-8 from Spotify. Preferences continue to write stable language-independent tokens (`language = en/tr`, `list_style = archive`, etc.). Native PSP error/debug output in `main.c` occurs before the full UI/settings bootstraps and is **not** covered by this translator.
+
+## Verification scope## Verification scope
 
 The final local build uses GCC 15.2.0, Windows CMake/Ninja and the MSYS2-hosted
 [pspdev-win v2](https://github.com/dmang-dev/pspdev-win/releases/tag/v2) toolchain.

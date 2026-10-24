@@ -15,8 +15,8 @@ static const char *const shape_names[] = { "Square", "Rounded", "Circle" };
 static const char *const shape_tokens[] = { "square", "rounded", "circle" };
 static const char *const text_names[] = { "Normal", "Small", "Large" };
 static const char *const text_tokens[] = { "normal", "small", "large" };
-static const char *const density_names[] = { "Comfortable", "Compact", "Text only" };
-static const char *const density_tokens[] = { "comfortable", "compact", "text" };
+static const char *const density_names[] = { "Comfortable", "Compact", "Text only", "Archive View" };
+static const char *const density_tokens[] = { "comfortable", "compact", "text", "archive" };
 static const char *const anim_names[] = { "Smooth", "Fast", "Off" };
 static const char *const anim_tokens[] = { "smooth", "fast", "off" };
 static const char *const clock_names[] = { "24-hour", "12-hour", "Hidden" };
@@ -76,6 +76,8 @@ static pref_def defs[PREF_COUNT] = {
                               text_tokens, 0),
     [PREF_DENSITY] = CHOICE("list_style", "List style", PREF_GROUP_APPEARANCE, density_names,
                             density_tokens, 0),
+    [PREF_LIST_COVERS] = CHOICE("list_covers", "List artwork", PREF_GROUP_APPEARANCE,
+                                off_on, on_off_tokens, 1),
     [PREF_ANIMATIONS] = CHOICE("animations", "Animations", PREF_GROUP_APPEARANCE, anim_names,
                                anim_tokens, 0),
     [PREF_CLOCK] = CHOICE("clock", "Clock", PREF_GROUP_APPEARANCE, clock_names, clock_tokens, 0),

@@ -28,6 +28,14 @@ You do not need to install any plugin or edit any file by hand.
 
 Pairing only happens once. Later starts refresh the stored token silently.
 
+## Choosing the browsing layout (development branch)
+
+In **Settings → Appearance**, **List artwork** hides list and mini-player covers when Off and avoids queueing thumbnail downloads. **List style → Archive View** uses two columns of ten for Liked Songs, Recently Played, Playlists, My Playlists and songs inside playlists. In Archive View, list artwork is always hidden even if the saved preference was On; the Now Playing artwork is independent. The album-art blurred background is also suppressed outside Now Playing while Archive View is active.
+
+When music is playing, **SELECT** switches from browsing to Now Playing; SELECT again restores the previous category and playlist level, focusing the actually playing song by track ID when it appears in that loaded list; otherwise the pre-SELECT cursor is restored. Returning to Recently Played with SELECT does not force a history refresh. This shortcut is disabled when SELECT is already used to move items (Queue / Settings → Categories). For Turkish and English details, see [FEATURES_TR.md](FEATURES_TR.md) / [FEATURES_EN.md](FEATURES_EN.md).
+
+Settings are stored in `settings.ini`: `list_style = archive` and `list_covers = on/off`. These options are not hardware-validated until the new development build is tested on a PSP.
+
 ## Moving an existing install
 
 If you already have a `spotify.cfg` from an older build, copy it into `ms0:/PSP/GAME/PSPOTIFY/` and the app will skip pairing.
