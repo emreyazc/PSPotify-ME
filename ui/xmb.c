@@ -478,7 +478,24 @@ void ui_update(ui_state *ui, unsigned buttons, float dt)
         ui->menu.level = lvl;
         ui->menu.index = *sel;
     }
-    if ((pressed & UI_BTN_SELECT) && list->movable && list->count > 0) ui->moving = 1;
+    if (pressed & UI_BTN_SELECT) {
+        if (list->movable && list->count > 0) {
+            /* Queue and Settings > Categories keep their existing SELECT behaviour. */
+            ui->moving = 1;
+        } else if (cat == UI_CAT_NOW) {
+            /* Restore the actual browsing state: level, selection and scroll
+             * never changed while Now Playing was on screen. */
+            if (ui->quick_return_valid && ui->quick_return_cat >= 0 &&
+                ui->quick_return_cat < UI_CATS) {
+                ui->cat = ui->quick_return_cat;
+                ui->quick_return_valid = 0;
+            }
+        } else if (ui->now.active && cat != UI_CAT_SETTINGS) {
+            ui->quick_return_cat = cat;
+            ui->quick_return_valid = 1;
+            ui->cat = UI_CAT_NOW;
+        }
+    }
     if (pressed & UI_BTN_START) emit(ui, UI_EV_QUIT, 0);
 
     /* L/R: a tap changes track and holding seeks, or only one of the two. */
@@ -541,6 +558,15 @@ static void animate(ui_state *ui, float dt)
         for (int l = 0; l < 2; ++l)
             ui->scroll[c][l] = approach(ui->scroll[c][l], (float)ui->sel[c][l], anim_rate(ui, 16.0f), dt);
     }
+}
+
+/* Archive mode is deliberately a distinct renderer, not a denser version
+ * of the XMB rows.  The existing directional/category controls are unchanged. */
+static int archive_category(const ui_state *ui, int cat)
+{
+    return ui->style.density == UI_DENSITY_ARCHIVE &&
+           (cat == UI_CAT_LIKED || cat == UI_CAT_PLAYLISTS ||
+            cat == UI_CAT_MY_PLAYLISTS);
 }
 
 /* ------------------------------------------------------------ list styles */
@@ -798,6 +824,78 @@ static void draw_list(const ui_state *ui, const ui_list *list, float scroll, flo
     r_clip(0, 0, 0, 0);
 }
 
+/* 20 entries/page: 1..10 on the left, 11..20 on the right.  Up/Down
+ * continue through those indices in order; Left/Right remain category keys.
+ * Paging follows the selected index without changing selection or scroll. */
+static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha, float slide)
+{
+    const ui_theme *t = &ui->theme;
+    const int level = ui->level[cat];
+    const ui_list *list = &ui->lists[cat][level];
+    const float footer_y = bottom - 24.0f;
+    const float top = list->header[0] ? 99.0f : 92.0f;
+    float rh = (footer_y - top - 3.0f) / 10.0f;
+    if (rh > 14.0f) rh = 14.0f;
+    if (alpha < 0.01f) return;
+
+    if (list->header[0])
+        font_draw_fit(FONT_BOLD, 10, 16 + slide, 82, color_fade(t->text, alpha),
+                      list->header, SCREEN_W - 30);
+    if (list->count <= 0) {
+        font_draw(FONT_REGULAR, 12, 20 + slide, top + 8, color_fade(t->dim, alpha),
+                  ui_tr(list->loading ? "Loading\xE2\x80\xA6" : "Nothing here yet"));
+        return;
+    }
+
+    int selected = ui->sel[cat][level];
+    if (selected < 0) selected = 0;
+    if (selected >= list->count) selected = list->count - 1;
+    const int page_start = (selected / 20) * 20;
+    r_clip(10, (int)top - 1, SCREEN_W - 18, (int)(footer_y - top));
+    for (int cell = 0; cell < 20 && page_start + cell < list->count; ++cell) {
+        const int idx = page_start + cell;
+        const ui_row *r = &list->rows[idx];
+        const int column = cell / 10, line = cell % 10;
+        const float x = (column ? 244.0f : 15.0f) + slide;
+        const float y = top + (float)line * rh;
+        if (idx == selected) {
+            draw_round_rect(x, y, 219, rh - 1, 3,
+                            color_fade(t->accent, alpha * 0.38f));
+        }
+        char ordinal[12];
+        snprintf(ordinal, sizeof ordinal, "%d", idx + 1);
+        font_draw(FONT_REGULAR, 9, x + 5, y + 1, color_fade(t->dim, alpha), ordinal);
+        if (r->playing) font_icon(ICON_PLAY, 9, x + 20, y + 1,
+                                  color_fade(t->accent, alpha));
+        font_draw_fit(idx == selected ? FONT_BOLD : FONT_REGULAR, 10, x + 37, y + 1,
+                      color_fade(idx == selected ? t->text : r->playing ? t->accent : t->dim,
+                                 alpha), r->title, 175);
+    }
+    r_clip(0, 0, 0, 0);
+
+    /* Text-only details of the selected item; no extra metadata fetches. */
+    const ui_row *selected_row = &list->rows[selected];
+    draw_round_rect(12, footer_y, SCREEN_W - 24, 22, 5,
+                    color_fade(t->surface, alpha));
+    char position[24];
+    snprintf(position, sizeof position, "%d/%d", selected + 1, list->count);
+    font_draw_fit(FONT_BOLD, 10, 20, footer_y + 1, color_fade(t->text, alpha),
+                  selected_row->title, SCREEN_W - 120);
+    font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
+              font_width(FONT_REGULAR, 9, position), footer_y + 3,
+              color_fade(t->accent, alpha), position);
+    const char *detail = ui->archive_detail[0] ? ui->archive_detail : selected_row->subtitle;
+    font_draw_fit(FONT_REGULAR, 9, 20, footer_y + 12, color_fade(t->dim, alpha),
+                  detail, SCREEN_W - 135);
+    if (ui->archive_duration_ms) {
+        char duration[16];
+        format_time(ui->archive_duration_ms, duration, sizeof duration);
+        font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
+                  font_width(FONT_REGULAR, 9, duration), footer_y + 13,
+                  color_fade(t->dim, alpha), duration);
+    }
+}
+
 static void draw_levels(const ui_state *ui, int cat, float x, float top, float bottom,
                         const list_style *st, float alpha, float slide)
 {
@@ -980,7 +1078,7 @@ static void draw_mini(const ui_state *ui)
     const float y = SCREEN_H - MINI_H;
     r_rect(0, y, SCREEN_W, MINI_H, t->player_bar);
     draw_progress(ui, 0, y, SCREEN_W, 2, 1.0f);
-    if (ui->style.list_covers)
+    if (ui->style.list_covers && ui->style.density != UI_DENSITY_ARCHIVE)
         draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
 
     char span[48], pos[16], dur[16];
@@ -992,7 +1090,7 @@ static void draw_mini(const ui_state *ui)
     right -= 10 + font_width(FONT_REGULAR, 10, span);
     font_draw(FONT_REGULAR, 10, right, y + 10, t->dim, n->loading ? "" : span);
 
-    float x = ui->style.list_covers ? 42.0f : 12.0f;
+    float x = ui->style.list_covers && ui->style.density != UI_DENSITY_ARCHIVE ? 42.0f : 12.0f;
     float tw = font_draw_fit(FONT_BOLD, 12, x, y + 9, t->text, n->title, right - x - 80);
     font_draw_fit(FONT_REGULAR, 11, x + tw + 8, y + 10, t->dim, n->artist, right - (x + tw + 8) - 12);
 }
@@ -1043,8 +1141,12 @@ void ui_draw(const ui_state *ui)
         draw_now(ui, alpha, slide);
         break;
     default: {
-        const list_style st = style_for(ui, 0);
-        draw_levels(ui, ui->cat, LIST_X, LIST_TOP, bottom, &st, alpha, slide);
+        if (archive_category(ui, ui->cat))
+            draw_archive(ui, ui->cat, bottom, alpha, slide);
+        else {
+            const list_style st = style_for(ui, 0);
+            draw_levels(ui, ui->cat, LIST_X, LIST_TOP, bottom, &st, alpha, slide);
+        }
         break;
     }
     }
