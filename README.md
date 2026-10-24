@@ -4,7 +4,7 @@
 
 A native Spotify client for the PlayStation Portable. Everything runs on the PSP itself — no PC, phone app or proxy in the loop. The second CPU, the **Media Engine**, decodes the music while the main CPU handles the network and the interface.
 
-- **XMB-style interface** drawn by the PSP's graphics chip: categories across the top, smooth lists, and optional artwork. A dense two-column **Archive View** can show 20 cover-free items on one screen.
+- **XMB-style interface** drawn by the PSP's graphics chip: categories across the top, smooth lists, and optional artwork. A dense two-column **Archive View** can show 20 cover-free list rows, with a single information-rich mini-player for the playing song.
 - **Search**, **Recently played**, **Liked Songs**, **playlists**, and a separate **My Playlists** view with pinning and sorting.
 - A **queue**: add songs with △, reorder them with SELECT; save and remove **Liked Songs** from the same menu.
 - **Full tracks** (Ogg Vorbis 160 kbps), streamed: long tracks play through a small buffer instead of filling the RAM.
@@ -16,7 +16,7 @@ A native Spotify client for the PlayStation Portable. Everything runs on the PSP
 
 Requires **Spotify Premium**.
 
-**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment and corrected SELECT follow-track navigation passed PSP-3000 tests. Newly completed Turkish/English translations still need a separate hardware check.
+**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment, SELECT follow-track navigation and Turkish/English interface tests passed on PSP-3000. The new single mini-player Archive layout on `feature/player-ui-polish` awaits PSP hardware testing.
 
 <p align="center">
   <a href="https://youtu.be/5UoCwZZf08E">
