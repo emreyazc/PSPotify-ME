@@ -244,6 +244,7 @@ const char *ui_tr(const char *english)
 #define LIST_X 100
 #define LIST_TOP 92
 #define MINI_H 34
+#define ARCHIVE_MINI_H 44 /* One readable two-line player instead of duplicate details */
 #define SEEK_HOLD 0.45f     /* L/R held longer than this seeks */
 
 static const char *const cat_names[UI_CATS] = {
@@ -852,28 +853,26 @@ static void draw_list(const ui_state *ui, const ui_list *list, float scroll, flo
     r_clip(0, 0, 0, 0);
 }
 
-/* 20 entries/page: 1..10 on the left, 11..20 on the right.  Up/Down
- * continue through those indices in order; Left/Right remain category keys.
- * Paging follows the selected index without changing selection or scroll. */
+/* 20 entries/page: 1..10 left, 11..20 right. Direction keys and
+ * automatic 20-item paging are unchanged. The selected row's details used
+ * to occupy a duplicate footer; its index/count now lives in the header
+ * while the sole Now Playing information sits in the mini-player. */
 static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha, float slide)
 {
     const ui_theme *t = &ui->theme;
     const int level = ui->level[cat];
     const ui_list *list = &ui->lists[cat][level];
-    const float footer_y = bottom - 24.0f;
-    /* The PSP's 480x272 canvas gets only ~12px per archive row with the
-     * mini player visible. Keep the header clear, then centre actual glyph
-     * metrics inside every highlight instead of letting 10px bold text
-     * extend past the selected green rectangle. */
-    const float top = list->header[0] ? 98.0f : 88.0f;
-    float rh = (footer_y - top - 1.0f) / 10.0f;
+    /* All archive lists use one heading; the saved 24px footer is returned
+     * to the grid, giving each of its ten rows more vertical breathing room. */
+    const float top = 98.0f;
+    float rh = (bottom - top - 1.0f) / 10.0f;
     if (rh > 14.0f) rh = 14.0f;
     if (alpha < 0.01f) return;
 
-    if (list->header[0])
-        font_draw_fit(FONT_BOLD, 10, 16 + slide, 82, color_fade(t->text, alpha),
-                      list->header, SCREEN_W - 30);
+    const char *heading = list->header[0] ? list->header : ui_tr(cat_names[cat]);
     if (list->count <= 0) {
+        font_draw_fit(FONT_BOLD, 10, 16 + slide, 82, color_fade(t->text, alpha),
+                      heading, SCREEN_W - 30);
         font_draw(FONT_REGULAR, 12, 20 + slide, top + 8, color_fade(t->dim, alpha),
                   ui_tr(list->loading ? "Loading\xE2\x80\xA6" : "Nothing here yet"));
         return;
@@ -882,8 +881,24 @@ static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha,
     int selected = ui->sel[cat][level];
     if (selected < 0) selected = 0;
     if (selected >= list->count) selected = list->count - 1;
+    const int total = ui->archive_total > list->count ? ui->archive_total : list->count;
+    const int is_playlist_catalogue = (cat == UI_CAT_PLAYLISTS || cat == UI_CAT_MY_PLAYLISTS)
+                                       && level == 0;
+    char meta[64];
+    snprintf(meta, sizeof meta,
+             is_playlist_catalogue ? (ui_language ? "%d liste · %d/%d" : "%d lists · %d/%d")
+                                   : (ui_language ? "%d şarkı · %d/%d" : "%d songs · %d/%d"),
+             total, selected + 1, total);
+    const float meta_w = font_width(FONT_REGULAR, 9, meta);
+    float heading_w = SCREEN_W - meta_w - 40.0f;
+    if (heading_w < 80.0f) heading_w = 80.0f;
+    font_draw_fit(FONT_BOLD, 10, 16 + slide, 82, color_fade(t->text, alpha),
+                  heading, heading_w);
+    font_draw(FONT_REGULAR, 9, SCREEN_W - 15 - meta_w + slide, 83,
+              color_fade(t->dim, alpha), meta);
+
     const int page_start = (selected / 20) * 20;
-    r_clip(10, (int)top - 1, SCREEN_W - 18, (int)(footer_y - top));
+    r_clip(10, (int)top - 1, SCREEN_W - 18, (int)(bottom - top));
     for (int cell = 0; cell < 20 && page_start + cell < list->count; ++cell) {
         const int idx = page_start + cell;
         const ui_row *r = &list->rows[idx];
@@ -907,28 +922,6 @@ static void draw_archive(const ui_state *ui, int cat, float bottom, float alpha,
                                  alpha), r->title, 175);
     }
     r_clip(0, 0, 0, 0);
-
-    /* Text-only details of the selected item; no extra metadata fetches. */
-    const ui_row *selected_row = &list->rows[selected];
-    draw_round_rect(12, footer_y, SCREEN_W - 24, 22, 5,
-                    color_fade(t->surface, alpha));
-    char position[24];
-    snprintf(position, sizeof position, "%d/%d", selected + 1, list->count);
-    font_draw_fit(FONT_BOLD, 10, 20, footer_y + 1, color_fade(t->text, alpha),
-                  selected_row->title, SCREEN_W - 120);
-    font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
-              font_width(FONT_REGULAR, 9, position), footer_y + 3,
-              color_fade(t->accent, alpha), position);
-    const char *detail = ui->archive_detail[0] ? ui->archive_detail : selected_row->subtitle;
-    font_draw_fit(FONT_REGULAR, 9, 20, footer_y + 12, color_fade(t->dim, alpha),
-                  detail, SCREEN_W - 135);
-    if (ui->archive_duration_ms) {
-        char duration[16];
-        format_time(ui->archive_duration_ms, duration, sizeof duration);
-        font_draw(FONT_REGULAR, 9, SCREEN_W - 20 -
-                  font_width(FONT_REGULAR, 9, duration), footer_y + 13,
-                  color_fade(t->dim, alpha), duration);
-    }
 }
 
 static void draw_levels(const ui_state *ui, int cat, float x, float top, float bottom,
@@ -1106,8 +1099,44 @@ static void draw_now(const ui_state *ui, float alpha, float slide)
     draw_next(ui, end, x + w, 241 - 6, alpha);
 }
 
+/* Archive mode uses one compact, information-rich player. Reuse the
+ * already downloaded Now Playing cover: archive list thumbnails remain off,
+ * so this costs no additional cover requests and keeps the user's preference. */
+static void draw_archive_mini(const ui_state *ui)
+{
+    const ui_theme *t = &ui->theme;
+    const ui_now *n = &ui->now;
+    const float y = SCREEN_H - ARCHIVE_MINI_H;
+
+    r_rect(0, y, SCREEN_W, ARCHIVE_MINI_H, t->player_bar);
+    r_rect(0, y, SCREEN_W, 1, color_mix(t->bg, t->dim, 0.30f));
+    font_icon(n->paused ? ICON_PLAY : ICON_PAUSE, 16, 11, y + 14, t->accent);
+    draw_cover(n->cover, n->color, 0, 35, y + 5, 34, 1.0f, 0);
+
+    const float text_x = 80.0f, text_w = 161.0f;
+    font_draw_fit(FONT_BOLD, 11, text_x, y + 6, t->text, n->title, text_w);
+    font_draw_fit(FONT_REGULAR, 10, text_x, y + 23, t->dim, n->artist, text_w);
+
+    char pos[16], dur[16], span[48];
+    format_time(n->pos_ms, pos, sizeof pos);
+    format_time(n->dur_ms, dur, sizeof dur);
+    snprintf(span, sizeof span, "%s / %s", pos, dur);
+    if (!n->loading) {
+        const float tw = font_width(FONT_REGULAR, 10, span);
+        const float time_x = SCREEN_W - tw - 12.0f;
+        const float bar_x = 252.0f;
+        const float bar_w = time_x - bar_x - 12.0f;
+        if (bar_w > 16.0f) draw_progress(ui, bar_x, y + 28, bar_w, 4, 1.0f);
+        font_draw(FONT_REGULAR, 10, time_x, y + 25, t->dim, span);
+    }
+}
+
 static void draw_mini(const ui_state *ui)
 {
+    if (archive_category(ui, ui->cat)) {
+        draw_archive_mini(ui);
+        return;
+    }
     const ui_theme *t = &ui->theme;
     const ui_now *n = &ui->now;
     const float y = SCREEN_H - MINI_H;
@@ -1172,7 +1201,7 @@ void ui_draw(const ui_state *ui)
     draw_categories(ui);
 
     const int mini = ui->now.active && ui->cat != UI_CAT_NOW;
-    const float bottom = (float)(mini ? SCREEN_H - MINI_H : SCREEN_H);
+    const float bottom = (float)(mini ? SCREEN_H - (archive_category(ui, ui->cat) ? ARCHIVE_MINI_H : MINI_H) : SCREEN_H);
     /* The new category's content slides in from the side it came from. */
     const float lag = (float)cat_slot(ui, ui->cat) - ui->cat_pos;
     const float alpha = clampf(1.0f - fabsf(lag) * 1.6f, 0.0f, 1.0f);
