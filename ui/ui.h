@@ -83,6 +83,7 @@ typedef enum {
     UI_EV_REPEAT,       /* ✕ on Now Playing */
     UI_EV_MENU,         /* value: chosen menu item; category, level, index: its row */
     UI_EV_MOVE,         /* value: -1 or +1; index: the row before it moved */
+    UI_EV_QUICK_RETURN, /* SELECT returned from Now Playing: host may follow playing track */
     UI_EV_ADJUST,       /* value: -1 or +1: ←/→ or ✕ (+1) on a row of an adjustable list */
     UI_EV_QUIT
 } ui_event_type;
