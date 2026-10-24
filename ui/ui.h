@@ -165,6 +165,7 @@ typedef struct ui_state {
     /* Selected Archive item details supplied by the host each frame. */
     char archive_detail[96];
     unsigned archive_duration_ms;
+    int archive_total; /* actual Spotify item count; can exceed the loaded rows */
     float cat_pos, scroll[UI_CATS][2], level_pos[UI_CATS], menu_pos;
     unsigned buttons;
     float repeat_at, lr_held, lr_seek_at;
