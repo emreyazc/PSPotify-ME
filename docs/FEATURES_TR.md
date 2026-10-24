@@ -23,17 +23,17 @@
 | Yalnızca yazı | Tek sütunda kapaksız metin satırları |
 | **Arşiv Görünümü** | **İki sütunda sayfa başına en fazla 20 öğe; liste kapağı yok** |
 
-**Arşiv Görünümü**, Beğenilen Şarkılar, Listeler, Benim Listelerim ve bir listenin içindeki şarkılar için ortaktır. Görünen sıra numaraları 1–10 solda, 11–20 sağdadır; sonraki 20 öğeye seçim ilerledikçe geçilir. Yukarı/aşağı tuşları **sıradaki/önceki öğeyi** seçer; soldan sağ sütuna geçmek için sol/sağ tuşları yeniden atanmaz. **Sol/sağ tuşları kategori değiştirmeye devam eder.** Liste içindeki son satır/son öğe, otomatik sonraki 20'lik sayfaya geçer.
+**Arşiv Görünümü**, Beğenilen Şarkılar, **Son Dinlenenler**, Listeler, Benim Listelerim ve bir listenin içindeki şarkılar için ortaktır. Görünen sıra numaraları 1–10 solda, 11–20 sağdadır; sonraki 20 öğeye seçim ilerledikçe geçilir. Yukarı/aşağı tuşları **sıradaki/önceki öğeyi** seçer; soldan sağ sütuna geçmek için sol/sağ tuşları yeniden atanmaz. **Sol/sağ tuşları kategori değiştirmeye devam eder.** Liste içindeki son satır/son öğe, otomatik sonraki 20'lik sayfaya geçer.
 
 Seçili öğe mavi/vurgu renkli arka planla işaretlenir. Alttaki detay şeridi, şarkılarda ad/sanatçı/süre/sıra-toplam; listelerde ad/sahip (veri varsa)/şarkı sayısı/sıra-toplam gösterir. **Spotify'dan gelen mevcut metadata'da albüm adı yer almadığı için** albüm adı bu detay şeridinde gösterilmez; olmayan tarih/alanlar uydurulmaz. Listenin içindeyken üstte liste adı gösterilir.
 
 `Ayarlar > Görünüm > Liste görselleri` ayarı Açık/Kapalıdır ve `list_covers = on/off` olarak saklanır. Kapatıldığında küçük görsel indirmeleri durur, ilgili doku önbelleği temizlenir ve mini oynatıcı kapaksız olur. **Arşiv Görünümü bu ayardan bağımsız olarak kapaksızdır:** ayar satırı açıklamayla etkisizleşir; mevcut Açık/Kapalı tercihi, normal liste biçimine dönüldüğünde korunur. Arşiv modunda bulanık albüm kapağı arka planı da gezinme ekranlarında çizilmez. Tema duvar kâğıdı bağımsızdır. **Şimdi Çalıyor** ekranındaki büyük kapak normal şekilde çalışır (Şimdi Çalıyor düzeni kullanıcı tarafından *Yalnızca yazı* seçilmemişse).
 
-Arama, Son Dinlenenler, Kuyruk ve Ayarlar, ilk sürümde mevcut XMB satır yerleşimini korur. Arşiv modu etkinken bu ekranlarda da küçük liste kapakları indirilmez; iki sütun tasarımı sadece yukarıdaki dört bölüme uygulanır.
+Arama, Kuyruk ve Ayarlar, mevcut XMB satır yerleşimini korur. Arşiv modu etkinken bu ekranlarda da küçük liste kapakları indirilmez; iki sütun tasarımı yukarıdaki **beş** bölümde uygulanır.
 
 ## SELECT ile Şimdi Çalıyor ↔ kaldığın liste
 
-Müzik çalıyorken Beğenilen Şarkılar, Listeler, Benim Listelerim, liste içi, Arama ve Son Dinlenenler gibi gezinme ekranlarında **SELECT** tuşuna basınca **Şimdi Çalıyor** açılır. **SELECT** tekrar basıldığında daha önceki kategoriye, aynı liste seviyesine ve aynı seçili öğeye geri dönülür. Gezinme durumunu saklamak için listedeki veriler yeniden yüklenmez ve kaydırma konumu sıfırlanmaz.
+Müzik çalıyorken Beğenilen Şarkılar, Listeler, Benim Listelerim, liste içi, Arama ve Son Dinlenenler gibi gezinme ekranlarında **SELECT** tuşuna basınca **Şimdi Çalıyor** açılır. **SELECT** tekrar basıldığında daha önceki kategoriye ve aynı liste seviyesine geri dönülür. Çalan parça **o listeye aitse ve görünür/yüklenmiş kayıtlarda bulunuyorsa**, seçim o an çalan parçaya kaydırılır (L/R ile değiştirilen parça da takip edilir). Çalan parça o listede bulunmuyorsa veya başka listeden oynuyorsa önceki seçim korunur. Sadece kısayol için liste yeniden yüklenmez.
 
 - Çalan bir şarkı yoksa hızlı geçiş tetiklenmez.
 - **Kuyruk** ve **Ayarlar > Kategoriler** ekranında SELECT'in mevcut öğe taşıma işlevi her zaman önceliklidir; bu işlev **değiştirilmedi**.
@@ -79,4 +79,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografi ile sığdırılır; uzun isimler hücre genişliğine göre kısaltılır, tam isim alt detay alanında da yer darlığına göre kısalabilir. Yeni düzen henüz gerçek PSP cihazında doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. Son düzeltmeler henüz tekrar PSP'de doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
