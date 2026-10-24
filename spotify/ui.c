@@ -411,7 +411,7 @@ static void apply_style(void)
     ui_style *st = &xmb.style;
     st->density = prefs[PREF_DENSITY];
     st->list_covers = prefs[PREF_LIST_COVERS];
-    thumbs_enabled = st->list_covers;
+    thumbs_enabled = st->list_covers && st->density != UI_DENSITY_ARCHIVE;
     st->text_size = prefs[PREF_TEXT_SIZE];
     st->anim = prefs[PREF_ANIMATIONS];
     st->hide_hints = prefs[PREF_HINTS];
@@ -2351,12 +2351,12 @@ static void pref_changed(pref_id id)
         rebuild_cover();
         break;
     case PREF_LIST_COVERS:
+    case PREF_DENSITY:
         apply_style();
-        if (!prefs[id]) clear_thumbs();
+        if (!thumbs_enabled) clear_thumbs();
         break;
     case PREF_VISUALIZER:
     case PREF_TEXT_SIZE:
-    case PREF_DENSITY:
     case PREF_ANIMATIONS:
     case PREF_HINTS:
     case PREF_NOW_LAYOUT:
