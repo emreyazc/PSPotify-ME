@@ -146,6 +146,7 @@ const char *ui_tr(const char *english)
         { "Compact", "Sıkışık" },
         { "Text only", "Yalnızca yazı" },
         { "Archive View", "Arşiv Görünümü" },
+        { "Archive View always hides list artwork", "Arşiv Görünümü liste kapaklarını gizler" },
         { "Smooth", "Akıcı" },
         { "Fast", "Hızlı" },
         { "Hidden", "Gizli" },
@@ -1116,7 +1117,8 @@ void ui_draw(const ui_state *ui)
 {
     const ui_theme *t = &ui->theme;
     r_clip(0, 0, 0, 0);
-    if (ui->style.backdrop) {
+    if (ui->style.backdrop && !(ui->style.density == UI_DENSITY_ARCHIVE &&
+                                 ui->cat != UI_CAT_NOW && ui->style.archive_hide_blurred_cover)) {
         int w, h;
         r_tex_size(ui->style.backdrop, &w, &h);
         r_tex_draw(ui->style.backdrop, 0, 0, (float)w, (float)h, 0, 0, SCREEN_W, SCREEN_H, 0xFFFFFFFFu);
