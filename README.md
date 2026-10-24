@@ -253,7 +253,7 @@ The interface also builds as a PC program with mock data, for working on layout 
 
 Third-party license texts are in [`licenses/`](licenses), including `inter-OFL.txt` and `noto-sans-OFL.txt`. The empty mini-player now holds a stable strip while browsing, so starting/stopping music never changes the list's vertical geometry.
 
-**PSP UI font A/B test:** builds use Inter by default. Set `PSPOTIFY_FONT=noto` for Noto Sans or `PSPOTIFY_FONT=mplus` for the original font **before running** `python3 scripts/build.py` (in Docker pass `-e PSPOTIFY_FONT=noto`). Rebuild and copy the resulting EBOOT to try another font; font choice is not a live setting. Your playlists and settings are unaffected. In PC/web preview the same build-time choice applies. These latest changes still require PSP-3000 device testing.
+**PSP UI font A/B test:** builds use Inter by default. Set `PSPOTIFY_FONT=noto` for Noto Sans or `PSPOTIFY_FONT=mplus` for the original font **before running** `python3 scripts/build.py` (in Docker pass `-e PSPOTIFY_FONT=noto`). Rebuild and copy the resulting EBOOT to try another font; font choice is not a live setting. Your playlists and settings are unaffected. In PC/web preview the same build-time choice applies. **PSP-3000 acceptance completed:** `FIX-01`, `FIX-02`, `FONT-01` and `FONT-02` all PASS with the default Inter build. Optional Noto Sans and M PLUS comparison builds have not been tested as part of this round.
 
 ## Disclaimer
 
