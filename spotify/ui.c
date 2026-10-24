@@ -2129,19 +2129,16 @@ static const spotify_track *row_track(int cat, int level, int i)
     return NULL;
 }
 
-/* Update Archive footer from metadata we already have, without extra
- * network requests or enlarging the per-row buffers in PSP RAM. */
-static void update_archive_details(void)
+/* A collection may have more tracks than its loaded page; the Archive
+ * heading reports the real count using metadata we already fetched. */
+static void update_archive_total(void)
 {
-    xmb.archive_detail[0] = '\0';
-    xmb.archive_duration_ms = 0;
     xmb.archive_total = 0;
     const int cat = xmb.cat, level = xmb.level[cat];
     if (prefs[PREF_DENSITY] != UI_DENSITY_ARCHIVE ||
         (cat != UI_CAT_LIKED && cat != UI_CAT_RECENT && !playlist_cat(cat))) return;
+
     const ui_list *list = &xmb.lists[cat][level];
-    /* Display the actual collection size, not just the currently loaded
-     * 25/50/75/100-song page. No extra network request is needed. */
     int total = list->count;
     if (cat == UI_CAT_LIKED && liked_count > total)
         total = liked_count;
@@ -2149,31 +2146,6 @@ static void update_archive_details(void)
              open_done_seq == open_req_seq && open_total_count > total)
         total = open_total_count;
     xmb.archive_total = total;
-    const int selected = xmb.sel[cat][level];
-    if (!list->rows || selected < 0 || selected >= list->count) return;
-
-    if (playlist_cat(cat) && level == 0) {
-        const int pidx = cat == UI_CAT_MY_PLAYLISTS
-                       ? my_playlist_view[selected] : playlist_view[selected];
-        const spotify_playlist *p = &playlists[pidx];
-        if (p->owner[0] && p->total >= 0)
-            snprintf(xmb.archive_detail, sizeof xmb.archive_detail,
-                     prefs[PREF_LANGUAGE] ? "Sahibi: %.50s · %d şarkı"
-                                          : "Owner: %.50s · %d songs",
-                     p->owner, p->total);
-        else if (p->owner[0])
-            snprintf(xmb.archive_detail, sizeof xmb.archive_detail,
-                     prefs[PREF_LANGUAGE] ? "Sahibi: %.70s" : "Owner: %.70s", p->owner);
-        else
-            copy_text(xmb.archive_detail, sizeof xmb.archive_detail,
-                      list->rows[selected].subtitle);
-    } else {
-        const spotify_track *t = row_track(cat, level, selected);
-        if (t) {
-            copy_text(xmb.archive_detail, sizeof xmb.archive_detail, t->artist);
-            xmb.archive_duration_ms = t->duration_ms;
-        }
-    }
 }
 
 static int is_liked(const char *id)
@@ -3036,7 +3008,7 @@ int spotify_ui_run(volatile int *exit_requested)
         handle_connect();
         maybe_expand_visible_tracks();
         sync_state();
-        update_archive_details();
+        update_archive_total();
         report_connect();
         log_tick();
 
