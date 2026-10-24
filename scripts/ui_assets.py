@@ -30,7 +30,7 @@ MPLUS_REF = "84efd8ad78c3710ad14bd909e3bc407151885628"
 MPLUS_URL = f"https://raw.githubusercontent.com/google/fonts/{MPLUS_REF}/ofl/"
 
 # Inter's optical size is fixed to 14 (UI text); Noto's width to 100.
-# SHA-1 values are Git blob hashes: SHA1(b"blob <length>\\0" + data).
+# SHA-1 values are Git blob hashes: SHA1(b"blob <length>\0" + data).
 FONT_VARIANTS = {
     "inter": ("Inter-Variable.ttf",
               FONT_URL + "inter/Inter%5Bopsz%2Cwght%5D.ttf",
@@ -88,7 +88,7 @@ WEIGHTS = {"ui_font_regular": 400, "ui_font_bold": 700, "ui_font_xbold": 800}
 def verify_source(data, digest):
     if digest.startswith("git:"):
         expected = digest[4:]
-        check = hashlib.sha1(f"blob {len(data)}\\0".encode("ascii") + data).hexdigest()
+        check = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
     else:
         expected = digest
         check = hashlib.sha256(data).hexdigest()
@@ -124,7 +124,7 @@ def fetch():
 
 def icon_codepoints():
     header = (ROOT / "ui" / "icons.h").read_text(encoding="utf-8")
-    return [int(cp, 16) for cp in re.findall(r"#define ICON_\\w+\\s+0x([0-9a-fA-F]+)u", header)]
+    return [int(cp, 16) for cp in re.findall(r"#define ICON_\w+\s+0x([0-9a-fA-F]+)u", header)]
 
 
 def subset_face(symbol, name):
