@@ -101,6 +101,7 @@ def package(build):
     run(sys.executable, ROOT / "scripts" / "verify_import_layout.py", build, "--output", debug)
     metadata = {
         "status": "BUILD VERIFIED",
+        "ui_font": os.environ.get("PSPOTIFY_FONT", "inter").strip().lower(),
         "version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
         "source_commit": source_git("rev-parse", "HEAD"),
         "source_branch": source_git("branch", "--show-current")
@@ -120,6 +121,7 @@ def package(build):
             if path.is_file(): archive.write(path, path.relative_to(dist))
         archive.write(dist / "BUILD.json", "BUILD.json")
     print(metadata["status"])
+    print(f"UI FONT: {metadata['ui_font']}")
     print(game / "EBOOT.PBP")
 
 
