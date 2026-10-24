@@ -138,6 +138,12 @@ def subset_face(symbol, name):
     options.name_IDs = ["*"]
     options.notdef_outline = True
     font = subset.load_font(str(FONTS / name), options)
+    if symbol != "ui_font_icons":
+        # Do not silently ship a font that renders Turkish letters as '?'.
+        required = "ÇçĞğİıÖöŞşÜü"
+        missing = [ch for ch in required if ord(ch) not in font.getBestCmap()]
+        if missing:
+            raise RuntimeError(f"{name}: missing Turkish glyphs: {''.join(missing)}")
     subsetter = subset.Subsetter(options)
     subsetter.populate(unicodes=icon_codepoints() if symbol == "ui_font_icons"
                        else TEXT_CODEPOINTS)
@@ -147,6 +153,8 @@ def subset_face(symbol, name):
         # variable-font support requirements in stb_truetype.
         font = instantiateVariableFont(
             font, {**axes, "wght": float(WEIGHTS[symbol])}, inplace=True)
+        if "fvar" in font:
+            raise RuntimeError("Variable font axes were not fully instantiated")
     buffer = io.BytesIO()
     subset.save_font(font, buffer, options)
     data = buffer.getvalue()
