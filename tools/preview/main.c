@@ -830,10 +830,10 @@ int main(int argc, char **argv)
     SDL_SetTextureScaleMode(screen, SDL_ScaleModeNearest);
     render_sdl_init(ren);
 
-    if (load_font(FONT_REGULAR, "MPLUSRounded1c-Regular.ttf") < 0 ||
-        load_font(FONT_BOLD, "MPLUSRounded1c-Bold.ttf") < 0 ||
-        load_font(FONT_XBOLD, "MPLUSRounded1c-ExtraBold.ttf") < 0 ||
-        load_font(FONT_ICONS, "lucide.ttf") < 0)
+    if (load_font(FONT_REGULAR, "preview-fonts/ui_font_regular.ttf") < 0 ||
+        load_font(FONT_BOLD, "preview-fonts/ui_font_bold.ttf") < 0 ||
+        load_font(FONT_XBOLD, "preview-fonts/ui_font_xbold.ttf") < 0 ||
+        load_font(FONT_ICONS, "preview-fonts/ui_font_icons.ttf") < 0)
         return 1;
 
     static ui_state ui;

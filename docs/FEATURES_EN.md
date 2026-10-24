@@ -2,6 +2,12 @@
 
 > This document covers PSP-3000 validated Archive mini-player (`UI-03..07`), compact category navigation (`NAV-01`), and redesigned Classic Now Playing layout (`NOW-01..02`). Actual PSP photos were visually checked for clipping/alignment. Turkish version: [FEATURES_TR.md](FEATURES_TR.md).
 
+## Constant mini-player space and selectable build fonts
+
+Browse-list geometry is constant whether music is playing or not. The bottom 44px Archive or 34px normal mini-player space is **always reserved**, showing an idle **Nothing playing** message when there is no track. Starting or stopping music does not shrink the list or move its rows.
+
+Fonts are selected **at build time**, not in Settings: **Inter** by default, **Noto Sans** via `PSPOTIFY_FONT=noto`, or the original **M PLUS Rounded 1c** via `PSPOTIFY_FONT=mplus`. Three actual static weights with Turkish glyphs (`ÇçĞğİıÖöŞşÜü`) are subset and linked to the EBOOT; only one family is included at a time. For the Docker build pass `-e PSPOTIFY_FONT=noto`. **PSP-3000 results:** fixed mini-player `FIX-01`, `FIX-02` and Inter Turkish-character/readability checks `FONT-01`, `FONT-02` all **PASS**. Optional Noto Sans and M PLUS comparison builds were not hardware-tested in this round.
+
 ## Music library and navigation
 
 - **Liked Songs:** Browse and play saved tracks from your Spotify library.
@@ -90,4 +96,4 @@ The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback 
 
 ## Scope and validation
 
-The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The redesigned Archive mini-player passed `UI-03..07` on a PSP-3000; the compact category bar passed `NAV-01`, and the refreshed Now Playing Classic layout and controls passed `NOW-01..02` on the PSP-3000. The final Now Playing hardware photograph was also reviewed.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
+The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout, green-highlight text alignment and the corrected SELECT follow-track behavior. Turkish/English UI tests `LANG-01..05` passed on PSP-3000. The redesigned Archive mini-player passed `UI-03..07` on a PSP-3000; the compact category bar passed `NAV-01`, and the refreshed Now Playing Classic layout and controls passed `NOW-01..02` on the PSP-3000. The final Now Playing hardware photograph was also reviewed. Fixed mini-player (`FIX-01..02`) and Inter typeface (`FONT-01..02`) subsequently passed PSP-3000 device checks.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).

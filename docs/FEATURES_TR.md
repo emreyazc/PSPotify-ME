@@ -2,6 +2,12 @@
 
 > Bu belge PSP-3000 üzerinde doğrulanan Arşiv mini oynatıcısı (`UI-03..07`) ile kompakt üst menü (`NAV-01`) ve yenilenen Şimdi Çalıyor ekranının (`NOW-01..02`) özelliklerini anlatır. Gerçek PSP fotoğraflarında belirgin bir hizalama/taşma sorunu görülmedi. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
 
+## Font seçimi ve sabit mini oynatıcı
+
+Şarkı çalarken ve hiçbir şarkı açık değilken liste yüksekliği **sabit** kalır. Arşiv Görünümü'nde alttaki 44 piksellik, diğer gezinme bölümlerinde 34 piksellik mini oynatıcı alanı daima ayrılır. Şarkı yokken burada **Bir şey çalmıyor** mesajı yer alır; şarkı başladığında liste satırları küçülüp kaymaz.
+
+Font karşılaştırması derleme aşamasındadır: varsayılan **Inter**; alternatif **Noto Sans** veya eski **M PLUS Rounded 1c**. Fontlar Türkçe `ÇçĞğİıÖöŞşÜü` harflerini içerir ve üç gerçek ağırlıkta küçültülüp PSP uygulamasına gömülür. Noto Sans için derlerken Docker'a `-e PSPOTIFY_FONT=noto` parametresi eklenir. Bu uygulama içinden değiştirilen bir ayar değildir; her seçimden sonra yeniden derleme gerekir. **PSP-3000 testi tamamlandı:** Sabit mini oynatıcı için `FIX-01` ve `FIX-02`, Inter fontunun Türkçe karakter/okunabilirlik kontrolü için `FONT-01` ve `FONT-02` **PASS** aldı. Alternatif Noto Sans ve M PLUS derlemeleri bu turda cihazda denenmedi.
+
 ## Müzik arşivi ve gezinme
 
 - **Beğenilen Şarkılar:** Spotify kütüphanesindeki beğenilen parçaları açar ve oynatır.
@@ -89,4 +95,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Tek mini oynatıcılı Arşiv görünümü `UI-03..07` testleri ve fotoğraf kontrolünde **PASS** aldı. Kompakt kategori menüsü `NAV-01`, yenilenen Şimdi Çalıyor Klasik tasarımı ve kontrolleri `NOW-01..02` testlerinde **PASS** aldı; yeni Şimdi Çalıyor ekranının gerçek PSP fotoğrafı ayrıca incelendi. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Tek mini oynatıcılı Arşiv görünümü `UI-03..07` testleri ve fotoğraf kontrolünde **PASS** aldı. Kompakt kategori menüsü `NAV-01`, yenilenen Şimdi Çalıyor Klasik tasarımı ve kontrolleri `NOW-01..02` testlerinde **PASS** aldı; yeni Şimdi Çalıyor ekranının gerçek PSP fotoğrafı ayrıca incelendi. Sabit oynatıcı (`FIX-01..02`) ve Inter font (`FONT-01..02`) cihaz testleri de **PASS** aldı. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).

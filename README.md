@@ -154,7 +154,7 @@ One folder per theme, a folder name in plain letters and numbers (up to 31), and
 
    A file that does not fit in memory streams through a 3 MB ring. Seeking jumps inside the buffer, or restarts the download at the right byte with an HTTP range request. The next track is resolved ahead of time.
 4. **Decoding.** Each Vorbis frame is handed to the Media Engine through mcidclan's safe-task dispatcher. A small assembly trampoline gives the task its own stack and enables the FPU. The Media Engine decodes the frame, runs the equalizer (five peaking filters) and writes s16 PCM back to shared memory; the main CPU queues it to the audio hardware. A build check fails if any code that runs on the Media Engine uses `syscall` or `$gp`.
-5. **Interface.** The XMB-style interface in `ui/` does not depend on the PSP: it draws through a small set of primitives, implemented with sceGu on the PSP and with SDL in the PC preview. Text is rendered from the M PLUS Rounded 1c font with stb_truetype; the fonts are cut down to the characters the app uses at build time.
+5. **Interface.** The XMB-style interface in `ui/` does not depend on the PSP: it draws through a small set of primitives, implemented with sceGu on the PSP and with SDL in the PC preview. Text uses **Inter** by default (screen-friendly Regular/Bold/ExtraBold), with **Noto Sans** and the original **M PLUS Rounded 1c** available as build-time alternatives. The build creates three static subsets retaining Turkish glyphs and renders them with stb_truetype; only the chosen family enters the EBOOT.
 
 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) covers the Media Engine protocol and its cache rules.
 
@@ -245,13 +245,15 @@ The interface also builds as a PC program with mock data, for working on layout 
 - [mcidclan](https://github.com/mcidclan): [psp-media-engine-custom-core](https://github.com/mcidclan/psp-media-engine-custom-core) and [psp-media-engine-safe-task](https://github.com/mcidclan/psp-media-engine-safe-task) (MIT). They make running code on the Media Engine possible.
 - [BearSSL](https://www.bearssl.org/) by Thomas Pornin (MIT).
 - [stb_vorbis, stb_image and stb_truetype](https://github.com/nothings/stb) by Sean Barrett (public domain / MIT).
-- [M PLUS Rounded 1c](https://github.com/coz-m/MPLUS_FONTS) by the M+ Project Authors (SIL Open Font License) and the [Lucide](https://lucide.dev) icons (ISC).
+- [Inter](https://github.com/rsms/inter) by the Inter Project Authors, [Noto Sans](https://github.com/notofonts/latin-greek-cyrillic) by the Noto Project Authors and original [M PLUS Rounded 1c](https://github.com/coz-m/MPLUS_FONTS) by the M+ Project Authors (each SIL Open Font License); [Lucide](https://lucide.dev) icons (ISC).
 - [librespot](https://github.com/librespot-org/librespot): the reference for Spotify's protocols.
 - [Sonora](https://github.com/sonorahq/sonora): the idea for Cover colors and the context-resolve approach to search (ideas only; no code was taken).
 - [SDL2](https://www.libsdl.org/) (zlib license), for the PC preview only.
 - The first interface and its layout came from my earlier [PSPotify](https://github.com/Agalar-Development/PSPotify) MP3 player.
 
-Third-party license texts are in [`licenses/`](licenses).
+Third-party license texts are in [`licenses/`](licenses), including `inter-OFL.txt` and `noto-sans-OFL.txt`. The empty mini-player now holds a stable strip while browsing, so starting/stopping music never changes the list's vertical geometry.
+
+**PSP UI font A/B test:** builds use Inter by default. Set `PSPOTIFY_FONT=noto` for Noto Sans or `PSPOTIFY_FONT=mplus` for the original font **before running** `python3 scripts/build.py` (in Docker pass `-e PSPOTIFY_FONT=noto`). Rebuild and copy the resulting EBOOT to try another font; font choice is not a live setting. Your playlists and settings are unaffected. In PC/web preview the same build-time choice applies. **PSP-3000 acceptance completed:** `FIX-01`, `FIX-02`, `FONT-01` and `FONT-02` all PASS with the default Inter build. Optional Noto Sans and M PLUS comparison builds have not been tested as part of this round.
 
 ## Disclaimer
 

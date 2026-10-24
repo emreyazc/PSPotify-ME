@@ -15,7 +15,7 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build import ROOT, fetch_sources  # noqa: E402
-from ui_assets import FACES, download, fetch as fetch_fonts, subset_face  # noqa: E402
+from ui_assets import FACES, FONTS, FONT_FAMILY, download, fetch as fetch_fonts, subset_face  # noqa: E402
 
 DEPS = ROOT / ".deps"
 OUT = ROOT / "build-preview"
@@ -49,6 +49,20 @@ def vcvars():
 SOURCES = ["tools/preview/main.c", "tools/preview/render_sdl.c",
            "ui/xmb.c", "ui/font.c", "ui/theme.c", "ui/draw.c", "ui/palette.c",
            "ui/stb_truetype_impl.c"]
+
+def preview_fonts():
+    """Generate distinct static weights for the PC and Web UI previews.
+
+    Directly loading the same variable font at every weight would make
+    Bold/ExtraBold silently render Regular in stb_truetype.
+    """
+    out = FONTS / "preview-fonts"
+    out.mkdir(parents=True, exist_ok=True)
+    for symbol, name in FACES:
+        (out / (symbol + ".ttf")).write_bytes(subset_face(symbol, name))
+    print(f"preview font family: {FONT_FAMILY}")
+    return out
+
 
 
 def library_header(library):
@@ -98,11 +112,12 @@ def build_web(library=None):
     emcc = shutil.which("emcc") or shutil.which("emcc.bat")
     if not emcc:
         raise RuntimeError("emcc not found (install and activate emsdk)")
-    # Subset fonts, like the PSP build: the full M PLUS faces are 3.5 MB each.
+    # Preload the same static face weights used by the desktop preview.
     fonts = out / "fonts"
     fonts.mkdir(exist_ok=True)
-    for symbol, name in FACES:
-        (fonts / name).write_bytes(subset_face(symbol, name))
+    for symbol, _ in FACES:
+        shutil.copy2(FONTS / "preview-fonts" / (symbol + ".ttf"),
+                     fonts / (symbol + ".ttf"))
     cmd = [emcc, "-O2", "-std=c11", "-sUSE_SDL=2", "-sALLOW_MEMORY_GROWTH=1",
            "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-sEXPORT_NAME=PSPotify",
            "-sENVIRONMENT=web", "-sEXIT_RUNTIME=0",
@@ -113,9 +128,9 @@ def build_web(library=None):
            f"-I{DEPS / 'stb'}", f"-I{ROOT / 'ui'}",
            *[str(ROOT / s) for s in SOURCES],
            "--preload-file", f"{ROOT / 'themes'}@/themes",
-           *[a for name in ("MPLUSRounded1c-Regular.ttf", "MPLUSRounded1c-Bold.ttf",
-                            "MPLUSRounded1c-ExtraBold.ttf", "lucide.ttf")
-             for a in ("--preload-file", f"{fonts / name}@/.deps/fonts/{name}")],
+           *[a for symbol, _ in FACES
+             for a in ("--preload-file",
+                       f"{fonts / (symbol + '.ttf')}@/.deps/fonts/preview-fonts/{symbol}.ttf")],
            "-o", "build-web/pspotify.mjs"]  # relative: the path ends up in the .mjs
     if library:
         library = Path(library).resolve()
@@ -137,6 +152,7 @@ def main():
     fetch_fonts()
     if args.fetch_only:
         return
+    preview_fonts()
     if args.web:
         build_web(args.library)
         return

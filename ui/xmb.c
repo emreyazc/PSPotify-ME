@@ -1149,6 +1149,13 @@ static void draw_archive_mini(const ui_state *ui)
 
     r_rect(0, y, SCREEN_W, ARCHIVE_MINI_H, t->player_bar);
     r_rect(0, y, SCREEN_W, 1, color_mix(t->bg, t->dim, 0.30f));
+    /* Keep this 44px strip even when idle so opening a song never shrinks
+     * the 20-row archive. An idle message replaces fake track metadata. */
+    if (!n->active) {
+        font_icon(ICON_MUSIC, 17, 17, y + 13, t->dim);
+        font_draw(FONT_BOLD, 11, 45, y + 13, t->dim, ui_tr("Nothing playing"));
+        return;
+    }
     font_icon(n->paused ? ICON_PLAY : ICON_PAUSE, 16, 11, y + 14, t->accent);
     draw_cover(n->cover, n->color, 0, 35, y + 5, 34, 1.0f, 0);
 
@@ -1180,6 +1187,11 @@ static void draw_mini(const ui_state *ui)
     const ui_now *n = &ui->now;
     const float y = SCREEN_H - MINI_H;
     r_rect(0, y, SCREEN_W, MINI_H, t->player_bar);
+    if (!n->active) {
+        font_icon(ICON_MUSIC, 15, 12, y + 10, t->dim);
+        font_draw(FONT_BOLD, 11, 37, y + 9, t->dim, ui_tr("Nothing playing"));
+        return;
+    }
     draw_progress(ui, 0, y, SCREEN_W, 2, 1.0f);
     if (ui->style.list_covers && ui->style.density != UI_DENSITY_ARCHIVE)
         draw_cover(n->cover, n->color, 0, 12, y + 7, 22, 1.0f, 0);
@@ -1243,7 +1255,9 @@ void ui_draw(const ui_state *ui)
     draw_top(ui);
     draw_categories(ui);
 
-    const int mini = ui->now.active && ui->cat != UI_CAT_NOW;
+    /* Allocate the mini-player space in every browse state, regardless of
+     * playback. Only Now Playing uses the full 272px canvas. */
+    const int mini = ui->cat != UI_CAT_NOW;
     const float bottom = (float)(mini ? SCREEN_H - (archive_category(ui, ui->cat) ? ARCHIVE_MINI_H : MINI_H) : SCREEN_H);
     /* The new category's content slides in from the side it came from. */
     const float lag = (float)cat_slot(ui, ui->cat) - ui->cat_pos;
