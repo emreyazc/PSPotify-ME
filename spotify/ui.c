@@ -2512,12 +2512,65 @@ static void settings_adjust(const ui_event *e)
     save_settings();
 }
 
+/* SELECT returned from Now Playing. When the active track belongs to
+ * the exact list that was being browsed, focus that track instead of the old
+ * cursor position. Otherwise keep the old selection and scroll untouched.
+ * Match IDs rather than queue indices: list sorting and queue shuffle can
+ * produce different orders, and the same track may appear more than once. */
+static void follow_playing_on_quick_return(void)
+{
+    const int cat = xmb.cat;
+    const int level = xmb.level[cat];
+    const ui_list *list = &xmb.lists[cat][level];
+    if (!list->rows || list->count <= 0) return;
+
+    int playing = request_index >= 0 ? request_index : current_index;
+    if (playing < 0 || playing >= queue_len || !queue[playing].id[0]) return;
+
+    if (cat == UI_CAT_LIKED) {
+        if (level != 0 || queue_key != -1) return;
+    } else if (playlist_cat(cat)) {
+        /* Root rows contain playlists, not tracks. The opened buffer
+         * belongs to only one playlist category at a time. */
+        if (level != 1 || cat != open_source_cat ||
+            open_shown_seq != open_done_seq ||
+            queue_key != open_done_playlist) return;
+    } else if (cat == UI_CAT_RECENT) {
+        if (level != 0 || recent_shown_seq != recent_done_seq ||
+            queue_key != -2000 - (int)recent_done_seq) return;
+    } else if (cat == UI_CAT_SEARCH) {
+        if (level != 0 || search_shown_seq != search_done_seq ||
+            queue_key != -10 - (int)search_done_seq) return;
+    } else {
+        return;
+    }
+
+    const int old = xmb.sel[cat][level];
+    int best = -1, best_distance = list->count + 1;
+    for (int i = 0; i < list->count; ++i) {
+        const spotify_track *candidate = row_track(cat, level, i);
+        if (!candidate || strcmp(candidate->id, queue[playing].id)) continue;
+        const int distance = i > old ? i - old : old - i;
+        if (distance < best_distance) {
+            best = i;
+            best_distance = distance;
+        }
+    }
+    if (best >= 0) {
+        xmb.sel[cat][level] = best;
+        xmb.scroll[cat][level] = (float)best;
+    }
+}
+
 /* Returns 1 when the user asked to quit. */
 static int handle(const ui_event *e)
 {
     switch (e->type) {
     case UI_EV_QUIT:
         return 1;
+    case UI_EV_QUICK_RETURN:
+        follow_playing_on_quick_return();
+        break;
     case UI_EV_OPEN:
         if (e->category == UI_CAT_LIKED && liked_shown > 0) {
             static char uri[sizeof ctx.cfg.username + 32];
