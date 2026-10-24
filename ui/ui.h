@@ -114,6 +114,7 @@ enum { UI_LR_BOTH, UI_LR_SEEK, UI_LR_SKIP };
 typedef struct ui_style {
     int density;        /* UI_DENSITY_*: list rows; Archive renders 2 x 10 */
     int list_covers;    /* list artwork and mini-player image; Now Playing unaffected */
+    int archive_hide_blurred_cover; /* archive mode never draws blurred album art */
     int text_size;      /* UI_TEXT_*: list titles */
     int anim;           /* UI_ANIM_* */
     int hide_hints;     /* no button hints in the top bar */
