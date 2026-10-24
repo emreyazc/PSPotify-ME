@@ -1106,6 +1106,13 @@ void ui_prebake(const ui_state *ui)
         font_draw(FONT_REGULAR, st.title_small, 0, 0, 0, "a");
         font_draw(FONT_XBOLD, st.title_big, 0, 0, 0, "a");
     }
+    if (ui->style.density == UI_DENSITY_ARCHIVE) {
+        /* Archive adds 9px text and 10px bold; prepare before the first frame. */
+        font_draw(FONT_REGULAR, 9, 0, 0, 0, "a");
+        font_draw(FONT_REGULAR, 10, 0, 0, 0, "a");
+        font_draw(FONT_BOLD, 10, 0, 0, 0, "a");
+        font_icon(ICON_PLAY, 9, 0, 0, 0);
+    }
     if (ui->style.now_layout == UI_NOW_CENTERED) font_draw(FONT_XBOLD, 17, 0, 0, 0, "a");
     if (ui->style.now_layout == UI_NOW_TEXT) {
         font_draw(FONT_XBOLD, 24, 0, 0, 0, "a");
