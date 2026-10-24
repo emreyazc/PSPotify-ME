@@ -1202,6 +1202,10 @@ static void draw_mini(const ui_state *ui)
 
 void ui_prebake(const ui_state *ui)
 {
+    /* The shared tab strip uses small labels in EVERY list density. Bake
+     * both faces before the first rendered frame to avoid mid-song stalls. */
+    font_draw(FONT_REGULAR, 9, 0, 0, 0, "a");
+    font_draw(FONT_BOLD, 10, 0, 0, 0, "a");
     /* Transparent draws bake an atlas without drawing anything. */
     for (int search = 0; search < 2; ++search) {
         const list_style st = style_for(ui, search);
