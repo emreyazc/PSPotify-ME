@@ -35,7 +35,7 @@ Search, Queue and Settings retain their previous row layout rather than adopting
 
 ## SELECT shortcut: Now Playing ↔ previous browsing position
 
-When a track is active, press **SELECT** while browsing to open **Now Playing**. Press **SELECT** again to return to the previous category and playlist depth. If the currently playing track belongs to that same source list and is among the currently loaded visible entries, selection follows that track (including L/R track changes from Now Playing). Otherwise the old selected item is retained. The shortcut itself never reloads the playlist.
+When a track is active, press **SELECT** while browsing to open **Now Playing**. Press **SELECT** again to return to the previous category and playlist depth. If the **actually playing track ID** occurs among the returned list's currently loaded visible entries, the cursor follows that track (including L/R track changes): if the playback indicator is on track 7, the selection is on track 7 too. Otherwise the cursor saved before SELECT is restored. The implementation matches track IDs rather than mutable playback source keys or queue positions. In Recently Played, this shortcut does not trigger an unnecessary history refresh that would reset the cursor.
 
 - The shortcut does nothing if there is no active track.
 - **Queue** and **Settings > Categories** retain their existing SELECT-to-move behavior; dragging/reordering takes priority over the shortcut.
@@ -80,4 +80,4 @@ The app streams Ogg Vorbis and uses the PSP Media Engine for decoding. Playback 
 
 ## Scope and validation
 
-The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The three latest fixes still require real PSP retesting.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
+The PSP screen is **480 × 272 pixels**. Archive View targets two columns of ten entries using compact typography and truncates long titles to cell width. Initial real-device testing reported text extending outside the green selection highlight; row text now adapts to the actual line height and is vertically centered. **The 24 October PSP tests passed the Recently Played layout and the green-highlight text alignment. The SELECT follow-track test failed and an additional fix now requires hardware retesting.** For implementation details see [IMPLEMENTATION.md](IMPLEMENTATION.md); for installation and troubleshooting see [SETUP.md](SETUP.md).
