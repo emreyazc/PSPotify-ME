@@ -238,10 +238,10 @@ const char *ui_tr(const char *english)
 
 #define SCREEN_W 480
 #define SCREEN_H 272
-#define NAV_Y 31            /* compact category tabs below the button hints */
+#define NAV_Y 31            /* scrollable compact tab row below button hints */
 #define NAV_H 26
-#define NAV_CENTER_X 144    /* focused green chip; neighbours remain small icons */
-#define NAV_ICON_GAP 35
+#define NAV_SIDE 10.0f
+#define NAV_GAP 5.0f
 #define LIST_X 100
 #define LIST_TOP 92
 #define MINI_H 34
@@ -740,38 +740,54 @@ static void draw_top(const ui_state *ui)
     }
 }
 
-/* Compact shared navigation: the focused category has a readable green
- * label, all others remain uniform 15px icons. This replaces the oversized
- * selected XMB icon without changing the category order, visibility or
- * Left/Right navigation. Off-screen neighbours are simply clipped. */
+/* The original XMB header enlarged the selected icon enough to obscure
+ * nearby tabs. The compact scrolling row keeps EVERY real category name and
+ * category order, with one small accent pill for the selected item. Existing
+ * Left/Right navigation and animated cat_pos drive its horizontal scrolling. */
 static void draw_categories(const ui_state *ui)
 {
     if (ui->cat_count <= 0) return;
     const ui_theme *t = &ui->theme;
     const int focus = cat_slot(ui, ui->cat);
-    const char *label = ui_tr(cat_names[ui->cat]);
-    const float label_w = font_width(FONT_BOLD, 10, label);
-    const float chip_w = fminf(label_w + 43.0f, 177.0f);
-    const float chip_x = NAV_CENTER_X - chip_w * 0.5f;
-
-    /* Draw quiet neighbour icons first so the active chip has priority.
-     * A symmetric slot layout means hidden categories never leave gaps. */
-    r_clip(8, NAV_Y - 2, SCREEN_W - 16, NAV_H + 4);
+    float widths[UI_CATS], positions[UI_CATS];
+    float used = 0.0f;
     for (int i = 0; i < ui->cat_count; ++i) {
-        if (i == focus) continue;
-        const int delta = i - focus;
-        const float x = delta < 0
-            ? chip_x - 23.0f - (float)(-delta - 1) * NAV_ICON_GAP
-            : chip_x + chip_w + 8.0f + (float)(delta - 1) * NAV_ICON_GAP;
-        if (x < 12 || x > SCREEN_W - 27) continue;
-        font_icon(cat_icons[ui->cat_order[i]], 15, x, NAV_Y + 5,
-                  color_fade(t->icons, 0.73f));
+        const char *label = ui_tr(cat_names[ui->cat_order[i]]);
+        widths[i] = clampf(font_width(FONT_BOLD, 10, label) + 35.0f,
+                           53.0f, 168.0f);
+        positions[i] = used;
+        used += widths[i] + NAV_GAP;
     }
+    used -= NAV_GAP;
 
-    draw_round_rect(chip_x, NAV_Y, chip_w, NAV_H, 9, t->accent);
-    font_icon(cat_icons[ui->cat], 15, chip_x + 10, NAV_Y + 5, t->bg);
-    font_draw_fit(FONT_BOLD, 10, chip_x + 31, NAV_Y + 7,
-                  t->bg, label, chip_w - 38);
+    const float viewport = SCREEN_W - 2.0f * NAV_SIDE;
+    const float max_scroll = fmaxf(0.0f, used - viewport);
+    /* Interpolate using the EXISTING category slide animation, not an extra
+     * stored scroll variable: the selected pill glides smoothly into view. */
+    const float focus_pos = clampf(ui->cat_pos, 0.0f, (float)(ui->cat_count - 1));
+    const int left = (int)focus_pos;
+    const int right = left + 1 < ui->cat_count ? left + 1 : left;
+    const float frac = focus_pos - (float)left;
+    const float center_a = positions[left] + widths[left] * 0.5f;
+    const float center_b = positions[right] + widths[right] * 0.5f;
+    const float center = center_a + (center_b - center_a) * frac;
+    const float scroll = clampf(center - viewport * 0.5f, 0.0f, max_scroll);
+
+    r_clip((int)NAV_SIDE, NAV_Y - 2, (int)viewport, NAV_H + 4);
+    for (int i = 0; i < ui->cat_count; ++i) {
+        const int cat = ui->cat_order[i];
+        const int active = i == focus;
+        const float x = NAV_SIDE + positions[i] - scroll;
+        const float w = widths[i];
+        if (x + w < NAV_SIDE || x > SCREEN_W - NAV_SIDE) continue;
+        if (active)
+            draw_round_rect(x, NAV_Y, w, NAV_H, 9, t->accent);
+        font_icon(cat_icons[cat], 14, x + 9, NAV_Y + 6,
+                  active ? t->bg : t->icons);
+        font_draw_fit(active ? FONT_BOLD : FONT_REGULAR, active ? 10 : 9,
+                      x + 29, NAV_Y + 7, active ? t->bg : t->dim,
+                      ui_tr(cat_names[cat]), w - 33);
+    }
     r_clip(0, 0, 0, 0);
 }
 
