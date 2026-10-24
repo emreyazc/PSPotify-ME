@@ -16,7 +16,7 @@ A native Spotify client for the PlayStation Portable. Everything runs on the PSP
 
 Requires **Spotify Premium**.
 
-**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment, SELECT follow-track navigation and Turkish/English interface tests passed on PSP-3000. The single mini-player Archive layout passed PSP-3000 tests `UI-03..07`. The refreshed Now Playing Classic screen and compact scrolling category tabs on `feature/player-ui-polish` await PSP hardware testing.
+**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment, SELECT follow-track navigation and Turkish/English interface tests passed on PSP-3000. The single mini-player Archive layout passed PSP-3000 tests `UI-03..07`. The refreshed Now Playing Classic screen and compact scrolling category tabs passed PSP-3000 hardware tests (`NAV-01`, `NOW-01`, `NOW-02`); a real-device screenshot was also reviewed.
 
 <p align="center">
   <a href="https://youtu.be/5UoCwZZf08E">
