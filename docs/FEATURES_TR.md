@@ -1,6 +1,6 @@
 # PSPotify ME — Özellikler ve Kullanım Kılavuzu (Türkçe)
 
-> Bu belge `feature/list-cover-toggle` geliştirme dalındaki uygulamayı anlatır. PSP üzerinde yapılacak Arşiv Görünümü ve SELECT kısayolu testleri tamamlanmadan bu sürümü doğrulanmış bir cihaz sürümü olarak değerlendirmeyin. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
+> Bu belge `master` üzerindeki doğrulanmış özellikleri ve `feature/player-ui-polish` dalındaki yeni oynatıcı tasarımını anlatır. Yeni tasarımın PSP cihaz testi henüz yapılmadı. İngilizce karşılığı: [FEATURES_EN.md](FEATURES_EN.md).
 
 ## Müzik arşivi ve gezinme
 
@@ -35,9 +35,9 @@
 
 **Arşiv Görünümü**, Beğenilen Şarkılar, **Son Dinlenenler**, Listeler, Benim Listelerim ve bir listenin içindeki şarkılar için ortaktır. Görünen sıra numaraları 1–10 solda, 11–20 sağdadır; sonraki 20 öğeye seçim ilerledikçe geçilir. Yukarı/aşağı tuşları **sıradaki/önceki öğeyi** seçer; soldan sağ sütuna geçmek için sol/sağ tuşları yeniden atanmaz. **Sol/sağ tuşları kategori değiştirmeye devam eder.** Liste içindeki son satır/son öğe, otomatik sonraki 20'lik sayfaya geçer.
 
-Seçili öğe mavi/vurgu renkli arka planla işaretlenir. Alttaki detay şeridi, şarkılarda ad/sanatçı/süre/sıra-toplam; listelerde ad/sahip (veri varsa)/şarkı sayısı/sıra-toplam gösterir. **Spotify'dan gelen mevcut metadata'da albüm adı yer almadığı için** albüm adı bu detay şeridinde gösterilmez; olmayan tarih/alanlar uydurulmaz. Listenin içindeyken üstte liste adı gösterilir.
+Seçili öğe tema vurgusuyla işaretlenir. **Ayrı seçili şarkı detay paneli kaldırıldı:** şarkı adı iki yerde tekrarlanmaz. Arşiv başlığında liste/kategori adı, gerçek toplam şarkı veya liste sayısı ve seçili öğenin sırası (`50 şarkı · 1/50`) görüntülenir. Bir listeye girildiğinde başlıkta o listenin adı kullanılır. **Çalmakta olan parça için tek bilgi alanı**, alt mini oynatıcıdır: şarkı, sanatçı, duraklat/çal simgesi, mevcut Şimdi Çalıyor kapağı, ilerleme çubuğu ve süre. Çalan şarkı yoksa mini oynatıcı görünmez.
 
-`Ayarlar > Görünüm > Liste görselleri` ayarı Açık/Kapalıdır ve `list_covers = on/off` olarak saklanır. Kapatıldığında küçük görsel indirmeleri durur, ilgili doku önbelleği temizlenir ve mini oynatıcı kapaksız olur. **Arşiv Görünümü bu ayardan bağımsız olarak kapaksızdır:** ayar satırı açıklamayla etkisizleşir; mevcut Açık/Kapalı tercihi, normal liste biçimine dönüldüğünde korunur. Arşiv modunda bulanık albüm kapağı arka planı da gezinme ekranlarında çizilmez. Tema duvar kâğıdı bağımsızdır. **Şimdi Çalıyor** ekranındaki büyük kapak normal şekilde çalışır (Şimdi Çalıyor düzeni kullanıcı tarafından *Yalnızca yazı* seçilmemişse).
+`Ayarlar > Görünüm > Liste görselleri` ayarı Açık/Kapalıdır ve `list_covers = on/off` olarak saklanır. Kapatıldığında küçük **liste** görsellerinin indirilmesi durur ve ilgili doku önbelleği temizlenir; standart mini oynatıcı kapaksız olur. **Arşiv Görünümü'nde liste satırları her zaman kapaksızdır:** ayar satırı açıklamayla etkisizleşir; normal liste biçimi için Açık/Kapalı tercihi korunur. Ancak yeni Arşiv mini oynatıcısı, ayrıca indirme başlatmadan **Şimdi Çalıyor için zaten yüklenmiş olan kapağı** küçük biçimde yeniden kullanır; kapak yoksa renkli yer tutucu gösterilir. Arşiv modunda bulanık albüm kapağı arka planı da gezinme ekranlarında çizilmez. Tema duvar kâğıdı bağımsızdır. **Şimdi Çalıyor** ekranındaki büyük kapak normal şekilde çalışır (Şimdi Çalıyor düzeni kullanıcı tarafından *Yalnızca yazı* seçilmemişse).
 
 Arama, Kuyruk ve Ayarlar, mevcut XMB satır yerleşimini korur. Arşiv modu etkinken bu ekranlarda da küçük liste kapakları indirilmez; iki sütun tasarımı yukarıdaki **beş** bölümde uygulanır.
 
@@ -89,4 +89,4 @@ Ogg Vorbis akışı PSP üzerinde çalınır; Media Engine ses çözer. Oynat/du
 
 ## Teknik notlar ve durum
 
-PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Bu bölümdeki yeni dil çevirileri ise henüz ayrıca cihazda doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
+PSP'nin gerçek ekranı **480 × 272** pikseldir. Arşiv tasarımının iki sütun × on satır hedefi bu alana sıkı tipografiyle sığdırılır. İlk PSP testinde yeşil seçili satırın dışına taşan yazılar görüldü; satır yazısı gerçek satır yüksekliğine göre küçültülüp dikey ortalanacak şekilde düzeltildi. Uzun isimler sütun genişliğine göre kısaltılır. 24 Ekim PSP testinde Son Dinlenenler arşivi, yeşil seçim kutusu hizası ve SELECT dönüşünde güncel parçaya odaklanma senaryoları **PASS** aldı. Türkçe/İngilizce dil testleri `LANG-01..05` de **PASS** aldı. Yeni tek mini oynatıcılı Arşiv görünümü ise henüz gerçek PSP'de doğrulanmamıştır. Teknik mimari: [IMPLEMENTATION.md](IMPLEMENTATION.md). Kurulum ve hata çözme: [SETUP.md](SETUP.md).
