@@ -12,6 +12,16 @@
 - **Recently Played:** Real track history, newest first, refreshed when revisited; server updates may take some time to appear.
 - **Queue:** Add and remove tracks; reorder upcoming tracks with SELECT and Up/Down.
 
+## Language support: English and Turkish
+
+Select **English** or **Türkçe** in `Settings > Appearance > Language`. The choice persists as `language = en/tr` in `settings.ini`. Application category names, settings, hints, notifications, error messages, list details and sign-in/device-pairing screens follow the selected language. Spotify-supplied track, artist, playlist and theme names are never translated. The PSP's built-in search keyboard also depends on the PSP system language.
+
+24/12-hour display choices, 25/50/75/100 songs-per-load choices and the **Next:** label on Now Playing are localized. The update mechanism itself is unchanged; only its user-facing status texts have been translated.
+
+**Audit and limits:** The shared UI dictionary contains 212 unique entries. A static check found no unmatched `ui_tr()` literal, settings choice or session sign-in status. This is not a substitute for real-device testing of dynamic strings. Low-level PSP/Media Engine diagnostic and recovery screens shown **before the application UI is initialized** remain in English; the saved language may not yet be loaded there.
+
+**Short device tests:** (1) Switch to Turkish, restart, and verify About, Now Playing and songs-per-load settings. (2) Pairing instructions appear only on first sign-in; do not delete credentials solely to test translations. (3) Switch to English and confirm these screens have no untranslated labels or clipping. (4) Try unusually long Turkish playlist names.
+
 ## List styles and artwork
 
 `Settings > Appearance > List style`:
