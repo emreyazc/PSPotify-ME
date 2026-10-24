@@ -10,13 +10,13 @@ A native Spotify client for the PlayStation Portable. Everything runs on the PSP
 - **Full tracks** (Ogg Vorbis 160 kbps), streamed: long tracks play through a small buffer instead of filling the RAM.
 - **Seek** (hold L/R), **shuffle**, **repeat**, and an **equalizer that runs on the Media Engine**.
 - **Themes** you can write in a text file, and **Cover colors**: the theme takes its color from the album art. Make one in the **[theme editor](https://luxotick.github.io/PSPotify-ME/)** in your browser.
-- **Make it yours** in Settings: list artwork on/off (suppresses downloads), an Archive View with two columns of ten, compact and text-only lists, Turkish/English language, a wallpaper or blurred album-cover backdrop, round/circular covers, three Now Playing layouts, a visualizer, equalizer, sleep timer, ○ as confirm, and more.
+- **Make it yours** in Settings: list artwork on/off (suppresses downloads), an Archive View with two columns of ten, compact and text-only lists, Turkish/English language, a wallpaper or blurred album-cover backdrop, round/circular covers, three Now Playing layouts (refreshed Classic), compact scrolling category tabs, a visualizer, equalizer, sleep timer, ○ as confirm, and more.
 - Signs in once by pairing at **spotify.com/pair** (like a smart TV), then refreshes silently.
 - **TLS 1.2** on the PSP through a bundled BearSSL: the firmware's SSL stops at TLS 1.0, and every Spotify endpoint requires TLS 1.2.
 
 Requires **Spotify Premium**.
 
-**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment, SELECT follow-track navigation and Turkish/English interface tests passed on PSP-3000. The new single mini-player Archive layout on `feature/player-ui-polish` awaits PSP hardware testing.
+**Feature documentation / Özellik dokümanları:** [English](docs/FEATURES_EN.md) · [Türkçe](docs/FEATURES_TR.md). Archive View covers Liked Songs, Recently Played, Playlists, My Playlists and tracks inside a playlist. Recently Played archive layout, highlight alignment, SELECT follow-track navigation and Turkish/English interface tests passed on PSP-3000. The single mini-player Archive layout passed PSP-3000 tests `UI-03..07`. The refreshed Now Playing Classic screen and compact scrolling category tabs on `feature/player-ui-polish` await PSP hardware testing.
 
 <p align="center">
   <a href="https://youtu.be/5UoCwZZf08E">
