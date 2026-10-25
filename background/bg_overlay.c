@@ -251,15 +251,12 @@ static int overlay_thread(SceSize args, void *argp)
             sceKernelDelayThread(30000);
             continue;
         }
-        /* Avoid colliding with the synchronous frame-flip draw. Prefer
-         * syscall painting whenever a frame has flipped in the last 200 ms.
-         * If a title bypasses the hook, the poll is synchronized to vblank. */
-        const unsigned now = sceKernelGetSystemTimeLow();
-        if (hook_installed && flip_calls &&
-            (unsigned)(now - last_flip_us) <= 200000u) {
-            sceKernelDelayThread(16000);
-            continue;
-        }
+        /* A scene change may overwrite or replace the buffer after the
+         * game's SetFrameBuf call. Even while the hook is active, refresh
+         * the currently DISPLAYED VRAM buffer once on each vblank.
+         * The synchronous hook paints upcoming frames; this vblank pass
+         * also catches menus, videos and temporary scene-transition
+         * buffers that the game renders after the flip. */
         sceDisplayWaitVblankStart();
         if (running && visible && !painting) {
             painting = 1;
