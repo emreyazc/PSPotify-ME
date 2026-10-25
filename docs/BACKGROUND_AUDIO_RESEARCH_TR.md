@@ -1,6 +1,6 @@
 # PSPotify ME — Background Playback / Oyun Sırasında Arka Planda Çalma
 
-**Durum:** Bağımsız oyun içi WAV oynatan **deneysel GAME PRX kodu** (`background/pspotify_bg.c`), derleme/CI ve geri alma belgeleri branch'e eklendi. **PSP-3000 üzerinde henüz çalıştığı test edilmedi. Spotify akışı ve otomatik oyun sesini kısma henüz mevcut değil.** Kurulum: [background/README_TR.md](../background/README_TR.md).
+**Durum (25 Ekim 2026):** Bağımsız GAME PRX **PSP-3000 / 6.61 ARK-5 üzerinde oyun sırasında WAV sesi üretti**. Böylece oyun içi eklenti yüklemesi ve PCM çıkışının ilk cihaz denemesi başarılı. Üretilmiş deneme melodisinin kalitesi kötü bulundu; gerçek kayıtla karşılaştırma, oyunun kendi sesini koruma, temiz çıkış, çoklu oyun ve ses düzeyi ayarı testleri henüz sonuçlanmadı. Spotify akışı ve otomatik oyun sesini kısma mevcut değil. Kurulum: [background/README_TR.md](../background/README_TR.md).
 
 **Hedef cihaz:** PSP-3000, sistem yazılımı 6.61, ARK-5.
 **Ayrı geliştirme dalı:** `feature/background-audio-prx`.
@@ -69,4 +69,4 @@
 
 İlk kod değişikliği tamamlandı: `background/` altında **yerel WAV müzik oynatan bağımsız GAME PRX** kaynağı ve `scripts/build_background.py` oluşturuldu. Bu prototip yalnızca `BG-00/01/02/03` (PRX yükleme, kısa müzik, ayrı müzik ses ayarı/oyun içinden mute) sınaması içindir; otomatik oyun sesi hook'u ya da Spotify entegrasyonu **yok**. İlk test paketi derlenip PSP'de doğrulanmadan Spotify/TLS/Media Engine karmaşıklığı eklenmeyecek.
 
-**Araştırma tarihi:** 25 Ekim 2026. **Mevcut durum:** İlk PRX kodu ve derleme paketi commit'lendi; gerçek PSP testi yapılmadı.
+**Araştırma tarihi:** 25 Ekim 2026. **Mevcut durum:** İlk PRX kodu derlendi ve oyun sırasında PSP-3000 üzerinde WAV sesi duyuldu. Oyun sesi karışımı / ses kalitesi / uzun süreli kararlılık / gerçek Spotify oynatımı henüz doğrulanmadı.
