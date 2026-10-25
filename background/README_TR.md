@@ -1,6 +1,6 @@
 # PSPotify BG — PSP'de oyun içi müzik PRX prototipi
 
-**Durum:** Kaynak kod, bağımsız Makefile, WAV örneği ve CI hedefi eklendi. **Gerçek PSP-3000 / ARK-5 testi henüz yapılmadı. Spotify akışı değil, oyun içinde müzik üretebilen ilk çalışabilir yerel oynatıcı denemesidir.**
+**Durum (25 Ekim 2026):** PSP-3000 / 6.61 ARK-5 üzerinde bir PSP oyunu çalışırken **deneme WAV sesi duyuldu**: GAME PRX yüklenmesi ve yerel ses çıkışı doğrulandı. Kullanıcı ilk test melodisinin sesini kalitesiz buldu; bunun üretilmiş örnek ses mi yoksa ses çıkışı kaynaklı mı olduğu henüz ayrıştırılmadı. Oyunun kendi sesiyle eşzamanlı karışım, XMB'ye temiz dönüş, çoklu oyun ve bağımsız müzik ses ayarı henüz ayrıca doğrulanmadı. **Spotify akışı hâlâ PRX'e bağlı değil.**
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
@@ -50,8 +50,8 @@ USB'den ayrılınca eklentinin algılanması için PSP'yi **tam yeniden başlat*
 
 | Test | Adım | PASS |
 | --- | --- | --- |
-| BG-01 | Normal bir PSP oyununu aç. Oyuna dön, sonra XMB'ye çık. | Oyun ve XMB donmadan çalışıyor; eklenti modülü yüklenmiş |
-| BG-02 | Oyunda ~10 saniyelik müziğin tekrar ettiğini dinle. | Deneme melodisi duyuluyor ve oyun çalışmaya devam ediyor |
+| BG-01 | Normal bir PSP oyununu aç. Oyuna dön, sonra XMB'ye çık. | Oyun ve XMB donmadan çalışıyor; eklenti modülü yüklenmiş. **İlk yükleme gözlemi başarılı; XMB'ye dönüş ayrıca doğrulanacak.** |
+| BG-02 | Oyunda ~10 saniyelik müziğin tekrar ettiğini dinle. | **PASS (ilk cihaz denemesi):** WAV sesi duyuldu; ses kalitesine ilişkin açık kontrol var. Tekrar/döngü ve oyun sesiyle birlikte çalma ayrıca doğrulanacak. |
 | BG-03 | Oyunun ayarlarından **oyun müziğini/ses efektlerini 0 yapabiliyorsan** kapat; `config.txt` içindeki `music_volume` değerini değiştirip tekrar dene. | Oyunun sesi susarken arka plan melodisi duyuluyor; PRX müzik sesi ayrı değişiyor |
 
 **BG-03 otomatik oyun sessize alma değildir.** Bu ilk PRX oyunun sistem ses fonksiyonlarını hook'lamıyor; bu yüzden oyun sesini yalnızca kendi oyun ayarından kapatabilirsin. Dinamik oyun sesi kısmayı güvenle sağlayan bir audio mixer/hook tasarlamak için **önce BG-01/02 PASS** görmemiz gerek. Eski MP3PlayerPlugin'in ses syscall yamasında donma raporları bulunuyor.
