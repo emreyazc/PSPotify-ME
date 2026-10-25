@@ -14,6 +14,7 @@
 #include <pspsdk.h>
 #include "bg_audio.h"
 #include "bg_overlay.h"
+#include "bg_input.h"
 #include <pspthreadman.h>
 #include <pspsdk.h>
 #include <stdint.h>
@@ -336,12 +337,15 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at)
     if ((btn & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE)) ==
                (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE) &&
         (pressed & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE))) {
-        bg_overlay_show(!bg_overlay_visible());
+        int show = !bg_overlay_visible();
+        bg_overlay_show(show);
+        if (!show) bg_input_guard_release();
         return 0;
     }
     if (bg_overlay_visible()) {
         if (pressed & PSP_CTRL_CIRCLE) {
             bg_overlay_show(0);
+            bg_input_guard_release();
             return 0;
         }
         if (pressed & PSP_CTRL_UP) *row = (*row + 5) % 6;
@@ -417,6 +421,10 @@ static int bg_main_thread(SceSize args, void *argp)
     else bg_log(bg_overlay_flip_hook_available() ?
                 "BG: display flip hook installed; synchronized overlay" :
                 "BG: no display hook, vblank polling fallback");
+    if (bg_input_init() == 0)
+        bg_log("BG: controller capture installed for game menu");
+    else
+        bg_log("BG: WARNING controller capture unavailable; menu buttons may reach the game");
 
     bg_scan_tracks();
     int enabled = bg_enabled(),paused = 0,row = 0,at = 0,invalid = 0;
@@ -503,6 +511,7 @@ static int bg_main_thread(SceSize args, void *argp)
         }
     }
 
+    bg_input_shutdown();
     bg_overlay_stop(); /* join before GAME tears framebuffer down */
     if (wav_fd >= 0) sceIoClose(wav_fd);
     if (channel >= 0) sceAudioChRelease(channel);
@@ -546,6 +555,7 @@ int module_stop(SceSize args, void *argp)
     }
     /* Failsafe after an interrupted audio thread: no stale draw worker
      * or patched audio syscall may survive the plugin unload. */
+    bg_input_shutdown();
     bg_overlay_stop();
     bg_game_audio_shutdown();
     return 0;
