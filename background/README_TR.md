@@ -1,6 +1,6 @@
 # PSPotify BG — PSP'de oyun içi müzik PRX prototipi
 
-**Durum (25 Ekim 2026):** PSP-3000 / 6.61 ARK-5 üzerinde bir PSP oyunu çalışırken **deneme WAV sesi duyuldu**: GAME PRX yüklenmesi ve yerel ses çıkışı doğrulandı. Kullanıcı ilk test melodisinin sesini kalitesiz buldu; bunun üretilmiş örnek ses mi yoksa ses çıkışı kaynaklı mı olduğu henüz ayrıştırılmadı. Oyunun kendi sesiyle eşzamanlı karışım, XMB'ye temiz dönüş, çoklu oyun ve bağımsız müzik ses ayarı henüz ayrıca doğrulanmadı. **Spotify akışı hâlâ PRX'e bağlı değil.**
+**Durum (25 Ekim 2026):** PSP-3000 / 6.61 ARK-5 üzerinde bir PSP oyunu çalışırken **deneme WAV sesi duyuldu**: GAME PRX yüklenmesi ve yerel ses çıkışı doğrulandı. Kullanıcı ilk test melodisinin sesini kalitesiz buldu; bunun üretilmiş örnek ses mi yoksa ses çıkışı kaynaklı mı olduğu henüz ayrıştırılmadı. **Oyunun kendi sesiyle PRX müziğinin aynı anda duyulduğu doğrulandı (MIX-01 PASS).** XMB'ye temiz dönüş, çoklu oyun ve bağımsız müzik ses ayarı henüz ayrıca doğrulanmadı. **Spotify akışı hâlâ PRX'e bağlı değil.**
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
