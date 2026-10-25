@@ -1,8 +1,36 @@
 # PSPotify BG — PSP'de oyun içi müzik PRX prototipi
 
-**Durum (25 Ekim 2026):** PSP-3000 / 6.61 ARK-5 üzerinde bir PSP oyunu çalışırken **deneme WAV sesi duyuldu**: GAME PRX yüklenmesi ve yerel ses çıkışı doğrulandı. Kullanıcı ilk test melodisinin sesini kalitesiz buldu; bunun üretilmiş örnek ses mi yoksa ses çıkışı kaynaklı mı olduğu henüz ayrıştırılmadı. **Oyunun kendi sesiyle PRX müziğinin aynı anda duyulduğu doğrulandı (MIX-01 PASS).** XMB'ye temiz dönüş, çoklu oyun ve bağımsız müzik ses ayarı henüz ayrıca doğrulanmadı. **Spotify akışı hâlâ PRX'e bağlı değil.**
+**Durum (25 Ekim 2026, yeni sürüm geliştirme aşamasında):** PSP-3000 / 6.61 ARK-5 üzerinde bir PSP oyunu çalışırken **deneme WAV sesi duyuldu**: GAME PRX yüklenmesi ve yerel ses çıkışı doğrulandı. Kullanıcı ilk test melodisinin sesini kalitesiz buldu; bunun üretilmiş örnek ses mi yoksa ses çıkışı kaynaklı mı olduğu henüz ayrıştırılmadı. **Oyunun kendi sesiyle PRX müziğinin aynı anda duyulduğu doğrulandı (MIX-01 PASS).** XMB'ye temiz dönüş, çoklu oyun ve bağımsız müzik ses ayarı henüz ayrıca doğrulanmadı. **Spotify akışı hâlâ PRX'e bağlı değil.**
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
+
+## Yeni özellikler: PSPotify ayarından aç/kapat ve oyun içi şarkı değiştirme
+
+**Henüz gerçek Spotify akışı yok.** Bu geliştirme, oynatma durumunu ve tuş kontrollerini gerçek PSP'de doğrulamak için yerel WAV örneklerini kullanıyor. PSPotify uygulamasında **Ayarlar → Oynatma → Oyun müziği (WAV testi)** adında yeni bir **Kapalı / Açık** tercihi var. Varsayılan **Kapalı**.
+
+- **Kapalı:** `ms0:/SEPLUGINS/pspotify_bg/enabled.txt` dosyasına `0` yazılır. PRX, ARK tarafından yüklense bile ses başlatmaz.
+- **Açık:** Aynı dosyaya `1` yazılır. PRX yeni açılan PSP oyunlarında ses başlatmayı dener.
+- **PSPotify uygulamasının içinde:** PRX kendi test müziğini PSPotify'nin Spotify müziğine karıştırmamaya çalışır; uygulama modülünü tanıyınca durur.
+- Ayar `settings.ini` ile saklanır. Başka bir oyundayken PSPotify ayarlarına erişilemiyor; değişiklik oyun açılmadan önce yapılmalı.
+
+Oyunda (PRX sürümü güncellendikten ve üç örnek WAV dosyası kopyalandıktan sonra):
+
+| Kombinasyon | İşlev |
+| --- | --- |
+| **SELECT + R** | Sonraki parça |
+| **SELECT + L** | Önceki parça |
+| **SELECT + Kare (□)** | Duraklat / devam ettir |
+
+Kombinasyonlar oyun tuşlarının kullanımını engellemez; oyun aynı basışları görebilir. Önce ana menüsü olmayan sakin bir oyun sahnesinde dene. 3 test parçası sırasıyla `music01.wav`, `music02.wav`, `music03.wav` dosyalarına yüklenir (en fazla sekiz: `music01.wav`–`music08.wav`). Hiç numaralı WAV yoksa eski `music.wav` kullanılır. İleri/geri şimdilik yalnızca bu WAV parçalarını değiştirir, **Spotify kuyruğunu değiştirmez**.
+
+### Yeni prototipi güncelleme
+
+1. `git pull --ff-only origin feature/background-audio-prx` komutundan sonra **ana PSPotify EBOOT'unu da** (normal `scripts/build.py` ile) yeniden derle. Çünkü Açık/Kapalı ayarı EBOOT'a eklendi. PSPotify EBOOT'u `F:\PSP\GAME\CAT_Araclar\PSPOTIFY\EBOOT.PBP` yoluna kopyala (kendi uygulama konumun farklıysa onu kullan).
+2. `scripts/build_background.py` ile ayrı PRX'i de derle; `dist/background/pspotify_bg.prx` ve `music01.wav`–`music03.wav` dosyalarını PSP'deki `F:\SEPLUGINS\pspotify_bg\` klasörüne kopyala. Önceki `config.txt` ve `music.wav` dosyasını değiştirmek zorunda değilsin.
+3. PSPotify'yi başlatıp Ayarlar → Oynatma → **Oyun müziği (WAV testi) → Açık** seç. Uygulamadan çık, ardından oyunu aç.
+4. İleri/geri, duraklat ve ayar **Kapalı** durumunu ayrı ayrı test et. Yeni EBOOT yüklenmezse `enabled.txt` oluşturulmaz, PRX güvenli biçimde **sessiz** kalır.
+
+**Dikkat:** Kurulum tamamsa fakat müzik gelmiyorsa `enabled.txt` dosyasının ilk karakterinin `1` olduğunu, `status.log` dosyasını ve `music01.wav` dosyasının varlığını kontrol et. `game` eklentisi ARK'de açık olması sesin otomatik etkin olduğu anlamına gelmiyor.
 
 ## 1. Kaynağı çek ve sadece PRX'i derle
 
