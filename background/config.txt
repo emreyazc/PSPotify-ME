@@ -1,0 +1,6 @@
+# PSPotify BG prototype: copied to ms0:/seplugins/pspotify_bg/config.txt
+# Music has a separate volume from the game's settings.
+# 0..100; initial default if absent: 70
+music_volume=70
+# 1 loops the WAV, 0 stops after one pass.
+loop=1
