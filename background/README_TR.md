@@ -4,6 +4,22 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## BG-09 — Titreyen menüye yönelik senkron görüntüleme düzeltmesi
+
+**Cihaz bulgusu (25 Ekim 2026):** Oyun sırasında `SELECT+ÜÇGEN` menüsü açıldı; ancak sürekli titriyor / görünür-kaybolur hâlde. Eski kod her 8,5 ms'de o anda ekranda bulunan tek framebuffer'a çiziyordu. Oyunun çift tamponlu çizimi menünün üstüne yeni kare getirdiği için bu yaklaşım doğal olarak kararsızdı.
+
+**Yeni kod (PSP üzerinde tekrar test edilecek):**
+
+- `sceDisplaySetFrameBuf` PSP NID `0x289D82FE`, ARK `sctrlHENFindFunction` ile keşfedilir; `sctrlHENPatchSyscall` ile kullanıcı çağrısı ekran değiştirmeden **önce** oyunun göstereceği yeni tampona menü çizilir.
+- Hook olmayan veya kanca çağrısı gelmeyen oyunlarda eski rasgele ~8,5ms iki kez çizim kaldırıldı; **vblank** ile eşzamanlı tek çizim yedeği kullanılır. Bu yedek bazı oyunlarda hâlâ titreyebilir.
+- Oyun dışındaki RAM adresleri boyanmaz; yalnız PSP'nin 2 MiB eDRAM penceresindeki 16/32 bit framebuffer adresleri kabul edilir. Grafik yazımı satır bazında optimize edildi.
+- PRX kapanırken display hook geri alınır; açık kaldığına dair varsayım yapılmaz.
+- `status.log`: `BG: display flip hook installed; synchronized overlay` veya `BG: no display hook, vblank polling fallback`. İlki **kancanın kurulduğunu** gösterir; oyunun gerçekten o yolu çağırdığını ancak menünün cihaz testi belirler.
+
+**Yalnız PRX güncelle:** Bu düzeltmede PSPotify `EBOOT.PBP`, `enabled.txt`, `mixer.txt`, `config.txt`, WAV ve `PLUGINS.TXT` dosyaları değişmez. Önceki çalışan PRX'i `pspotify_bg.prx.pre-menu.bak` adıyla yedekte tut; güncel `dist/background/pspotify_bg.prx` dosyasını yükle. Oyunu açıp yalnız menüyü aç/kapat ve menü titremesini kontrol et. Donma olursa BG satırını `off` yaparak yeniden başlat; eski PRX'i geri yükle.
+
+**Test kriteri:** Menü en az 30 saniye açıkken oyunun görüntüsü yenilenmesine rağmen görünür kalması, tuşların tepki vermesi, menüyü kapatınca oyunun normal devam etmesi. `master` bu test geçene kadar değiştirilmez.
+
 ## Yeni oyun içi mini menü (deneysel — PSP doğrulaması bekleniyor)
 
 PSP oyunu içindeyken **SELECT + ÜÇGEN (△)** ile VSH tarzı siyah/yeşil PSPotify BG menüsünü aç/kapat. Menü GAME PRX'inde çalışır; XMB `vsh` ve PS1 `pops` ortamlarına kurulmaz.
