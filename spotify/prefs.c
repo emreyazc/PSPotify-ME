@@ -112,6 +112,8 @@ static pref_def defs[PREF_COUNT] = {
     [PREF_BATTERY] = CHOICE("battery_saver", "Battery saver", PREF_GROUP_PLAYBACK, off_on,
                             on_off_tokens, 0),
     [PREF_CPU] = CHOICE("cpu_speed", "CPU speed", PREF_GROUP_PLAYBACK, cpu_names, cpu_tokens, 0),
+    [PREF_GAME_AUDIO] = CHOICE("game_music", "Game music (WAV test)", PREF_GROUP_PLAYBACK,
+                               off_on, on_off_tokens, 0),
     [PREF_CONNECT] = CHOICE("connect", "Spotify Connect", PREF_HIDDEN, off_on, on_off_tokens, 0),
     [PREF_CONFIRM] = CHOICE("confirm_button", "Confirm button", PREF_GROUP_CONTROLS,
                             confirm_names, confirm_tokens, 0),
