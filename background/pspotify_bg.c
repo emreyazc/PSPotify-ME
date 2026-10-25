@@ -201,6 +201,16 @@ static int bg_main_thread(SceSize args, void *argp)
         return 0;
     }
 
+    /* Give the game a chance to reserve its own channels first.
+     * Never preempt the game's boot sequence just to start our music. */
+    bg_log("BG: waiting 4 seconds for game audio initialization");
+    for (int i = 0; i < 40 && !bg_stop; ++i)
+        sceKernelDelayThread(100000);
+    if (bg_stop) {
+        sceIoClose(wav_fd);
+        return 0;
+    }
+
     /* First try a spare PSP hardware PCM channel (game audio preserved). */
     int channel = sceAudioChReserve(PSP_AUDIO_NEXT_CHANNEL, BG_FRAMES,
                                     PSP_AUDIO_FORMAT_STEREO);
