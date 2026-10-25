@@ -161,6 +161,10 @@ static int paint(void)
     uintptr_t top=(uintptr_t)addr;
     uintptr_t norm=top & 0x0fffffffu;
     if(norm<0x04000000u||norm>=0x04200000u)return -1;
+    /* Never render outside the mapped 2 MiB EDRAM aperture, even when a
+     * game reports an unusual stride or framebuffer placement. */
+    uintptr_t needed=(uintptr_t)stride*272u*(fmt==3?4u:2u);
+    if(norm+needed>0x04200000u)return -1;
     /* Use PSP's uncached VRAM alias to avoid stale CPU cache lines. */
     Canvas c={(uint8_t*)(norm|0x40000000u),stride,fmt};
     draw_menu(&c);
