@@ -30,3 +30,38 @@ jobs:
           name: PSPotify-ME
           path: dist/
           if-no-files-found: error
+
+  background_prx:
+    name: Build independent GAME audio PRX
+    runs-on: ubuntu-latest
+    container:
+      image: pspdev/pspdev:v20261001
+    steps:
+      - name: Install Python for WAV test sample
+        run: apk add --no-cache python3
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Build standalone PRX and PCM16 music sample
+        shell: bash
+        run: python3 scripts/build_background.py
+      - name: Validate artifact and WAV format
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import wave
+          p = Path("dist/background/pspotify_bg.prx")
+          assert p.is_file() and p.stat().st_size > 100, "missing PRX"
+          with wave.open("dist/background/music.wav", "rb") as w:
+              assert w.getnchannels() == 2
+              assert w.getsampwidth() == 2
+              assert w.getframerate() == 44100
+              assert w.getnframes() > 44100
+          print("BACKGROUND ARTIFACT CHECK PASS")
+          PY
+      - name: Upload GAME PRX test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSPotify-BG-Experimental
+          path: dist/background/
+          if-no-files-found: error
