@@ -70,3 +70,17 @@
 İlk kod değişikliği tamamlandı: `background/` altında **yerel WAV müzik oynatan bağımsız GAME PRX** kaynağı ve `scripts/build_background.py` oluşturuldu. Bu prototip yalnızca `BG-00/01/02/03` (PRX yükleme, kısa müzik, ayrı müzik ses ayarı/oyun içinden mute) sınaması içindir; otomatik oyun sesi hook'u ya da Spotify entegrasyonu **yok**. İlk test paketi derlenip PSP'de doğrulanmadan Spotify/TLS/Media Engine karmaşıklığı eklenmeyecek.
 
 **Araştırma tarihi:** 25 Ekim 2026. **Mevcut durum:** İlk PRX kodu derlendi ve oyun sırasında PSP-3000 üzerinde WAV sesi duyuldu. Oyun sesi karışımı / ses kalitesi / uzun süreli kararlılık / gerçek Spotify oynatımı henüz doğrulanmadı.
+
+
+## BG-04 — Spotify arayüzü ile oyun PRX'i arasında aç/kapat ve parça kontrolü (25 Ekim)
+
+**Kodlandı; henüz yeni sürüm cihazda denenmedi:**
+
+- `spotify/prefs.h/.c`: `PREF_GAME_AUDIO`, `game_music=off/on`; `Playback / Oynatma` altında yeni **Game music (WAV test) / Oyun müziği (WAV testi)** tercihi.
+- `spotify/ui.c`: Bu tercih değiştiğinde `ms0:/SEPLUGINS/pspotify_bg/enabled.txt` dosyasına `0` veya `1` yazar; uygulama açılışında da durumu eşitler. Hata halinde açık görünmesini engeller.
+- `background/pspotify_bg.c`: Eksik `enabled.txt` kapalı sayılır, PSPotify uygulamasının kendisi açılırsa WAV müziğini araya sokmamaya çalışır; oyun içinde **SELECT+R** sonraki, **SELECT+L** önceki WAV parçası, **SELECT+Kare** duraklat/devam.
+- PRX en fazla sekiz numaralı `music01.wav`–`music08.wav` arasındaki mevcut dosyaları sırayla oynatır; hiçbiri yoksa geriye dönük uyum için `music.wav` kullanır.
+- `scripts/build_background.py`: Üç ayırt edilebilir, orijinal telifsiz test melodisi üretir.
+- `background/README_TR.md`: EBOOT ve PRX çift güncelleme, cihaz testleri ve kurtarma talimatları.
+
+**Önemli:** Yeni kontrol tuşları şu anda Spotify kuyruğuna erişmez; ses kaynağı yerel WAV'dır. Spotify akışını oyun içinde sağlayabilmek için ayrı çalışma ortamında WLAN/TLS/Ogg Vorbis/kimlik yenileme ve ses sahipliği çalışmalarının gerçek cihazda tamamlanması gerekir. Açık/Kapalı ayarı altyapıyı hazırlar; **bu aşamada Spotify'ın oyun arkasında çaldığını iddia etmiyoruz.** Cihaz sonuçlarına göre PRX ve EBOOT ayrı merge kararı verilecek.
