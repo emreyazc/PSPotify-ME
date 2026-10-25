@@ -1,0 +1,5 @@
+# ARK-5: EXAMPLE ONLY. Do not replace your existing PLUGINS.TXT.
+# Append this line to ms0:/SEPLUGINS/PLUGINS.TXT for a controlled GAME test.
+# Disable by changing on -> off, or remove this one line.
+# WARNING: game runlevel can affect all PSP games; start with one simple game.
+game, ms0:/SEPLUGINS/pspotify_bg/pspotify_bg.prx, on
