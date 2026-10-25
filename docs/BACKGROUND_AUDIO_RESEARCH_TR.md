@@ -1,6 +1,6 @@
 # PSPotify ME — Background Playback / Oyun Sırasında Arka Planda Çalma
 
-**Durum (25 Ekim 2026):** Bağımsız GAME PRX **PSP-3000 / 6.61 ARK-5 üzerinde oyun sırasında WAV sesi üretti**. Böylece oyun içi eklenti yüklemesi ve PCM çıkışının ilk cihaz denemesi başarılı. Üretilmiş deneme melodisinin kalitesi kötü bulundu; gerçek kayıtla karşılaştırma, oyunun kendi sesini koruma, temiz çıkış, çoklu oyun ve ses düzeyi ayarı testleri henüz sonuçlanmadı. Spotify akışı ve otomatik oyun sesini kısma mevcut değil. Kurulum: [background/README_TR.md](../background/README_TR.md).
+**Durum (25 Ekim 2026):** Bağımsız GAME PRX **PSP-3000 / 6.61 ARK-5 üzerinde oyun sırasında WAV sesi üretti**. Böylece oyun içi eklenti yüklemesi ve PCM çıkışının ilk cihaz denemesi başarılı. Üretilmiş deneme melodisinin kalitesi kötü bulundu; gerçek kayıtla karşılaştırma henüz yapılmadı. **Oyunun kendi sesi ile PRX müziği eşzamanlı duyuldu (MIX-01 PASS); sessize alma gerekli olmadığı ilk cihaz testinde görüldü.** Temiz çıkış, çoklu oyun ve ses düzeyi ayarı testleri henüz sonuçlanmadı. Spotify akışı ve otomatik oyun sesini kısma mevcut değil. Kurulum: [background/README_TR.md](../background/README_TR.md).
 
 **Hedef cihaz:** PSP-3000, sistem yazılımı 6.61, ARK-5.
 **Ayrı geliştirme dalı:** `feature/background-audio-prx`.
