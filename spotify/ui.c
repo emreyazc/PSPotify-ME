@@ -789,6 +789,23 @@ static void fill_settings(void)
     fill_options();
 }
 
+/* GAME PRX reads this one-byte state on launch. Default OFF on a fresh
+ * installation. Keep it separate from PSPotify's ordinary settings.ini
+ * because a different process loads the GAME plugin.
+ * The PRX itself is still enabled/disabled by ARK's PLUGINS.TXT. */
+static int game_music_write_enabled(void)
+{
+    const char *path = "ms0:/SEPLUGINS/pspotify_bg/enabled.txt";
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        log_printf("BG: cannot write enable switch to %s\n", path);
+        return -1;
+    }
+    const int ok = fputc(prefs[PREF_GAME_AUDIO] ? '1' : '0', f) != EOF;
+    const int closed = fclose(f);
+    return ok && !closed ? 0 : -1;
+}
+
 static void save_settings(void)
 {
     char path[300];
@@ -889,6 +906,9 @@ static void load_settings(void)
         fclose(f);
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
+    /* Creates/refreshes the PRX's persistent OFF/ON switch on app start.
+     * If the folder was not installed, ordinary Spotify still works. */
+    game_music_write_enabled();
     ui_set_language(prefs[PREF_LANGUAGE]);
     liked_visible_limit = opened_visible_limit = songs_page_size();
     liked_load_target = liked_visible_limit;
@@ -2469,6 +2489,16 @@ static void pref_changed(pref_id id)
     case PREF_LR:
     case PREF_VOLUME_STEP:
         apply_style();
+        break;
+    case PREF_GAME_AUDIO:
+        if (game_music_write_enabled() < 0) {
+            prefs[id] = 0; /* never falsely present the feature as enabled */
+            game_music_write_enabled();
+            ui_toast(&xmb, "Couldn't enable game music: PRX files missing");
+        } else {
+            ui_toast(&xmb, prefs[id] ? "Test WAV music enabled for games" :
+                                    "Game music disabled");
+        }
         break;
     case PREF_CONNECT:
         if (prefs[id]) connect_start(&ctx, connect_name());
