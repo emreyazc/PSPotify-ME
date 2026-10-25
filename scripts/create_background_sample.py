@@ -14,14 +14,15 @@ NOTES = (220, 261.63, 329.63, 293.66, 392, 329.63, 261.63, 220)
 SECS_PER_NOTE = 1.2
 
 
-def make_sample(target: Path):
+def make_sample(target: Path, pitch: float = 1.0):
     target.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(target), "wb") as out:
         out.setnchannels(2)
         out.setsampwidth(2)
         out.setframerate(RATE)
         frames_per_note = round(RATE * SECS_PER_NOTE)
-        for note in NOTES:
+        for original_note in NOTES:
+            note = original_note * pitch
             buffer = bytearray()
             for i in range(frames_per_note):
                 time = i / RATE
@@ -40,5 +41,7 @@ def make_sample(target: Path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("dist/background/music.wav"))
+    parser.add_argument("--pitch", type=float, default=1.0,
+                        help="Change note frequencies to distinguish playlist tracks")
     args = parser.parse_args()
-    make_sample(args.output)
+    make_sample(args.output, args.pitch)
