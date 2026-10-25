@@ -793,6 +793,16 @@ static void fill_settings(void)
  * installation. Keep it separate from PSPotify's ordinary settings.ini
  * because a different process loads the GAME plugin.
  * The PRX itself is still enabled/disabled by ARK's PLUGINS.TXT. */
+static int game_music_read_enabled(void)
+{
+    const char *path = "ms0:/SEPLUGINS/pspotify_bg/enabled.txt";
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    int c = fgetc(f);
+    fclose(f);
+    return c == '1' ? 1 : c == '0' ? 0 : -1;
+}
+
 static int game_music_write_enabled(void)
 {
     const char *path = "ms0:/SEPLUGINS/pspotify_bg/enabled.txt";
@@ -906,9 +916,11 @@ static void load_settings(void)
         fclose(f);
     }
     if (!PSPOTIFY_CONNECT) prefs[PREF_CONNECT] = 0;
-    /* Creates/refreshes the PRX's persistent OFF/ON switch on app start.
-     * If the folder was not installed, ordinary Spotify still works. */
-    game_music_write_enabled();
+    /* In-game menu may have changed the shared switch since last run.
+     * Reflect its state instead of overwriting it with old settings.ini. */
+    int prx_enabled = game_music_read_enabled();
+    if (prx_enabled >= 0) prefs[PREF_GAME_AUDIO] = prx_enabled;
+    else game_music_write_enabled(); /* fresh install: default OFF */
     ui_set_language(prefs[PREF_LANGUAGE]);
     liked_visible_limit = opened_visible_limit = songs_page_size();
     liked_load_target = liked_visible_limit;
