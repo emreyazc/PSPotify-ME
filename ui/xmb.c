@@ -147,6 +147,7 @@ const char *ui_tr(const char *english)
         { "Game music (WAV test)", "Oyun müziği (WAV testi)" },
         { "Test WAV music enabled for games", "Oyunlarda WAV test müziği açıldı" },
         { "Game music disabled", "Oyun müziği kapatıldı" },
+        { "Couldn't enable game music: PRX files missing", "Oyun müziği açılamadı: PRX dosyaları eksik" },
         { "Confirm button", "Onay tuşu" },
         { "L and R", "L ve R" },
         { "Volume step", "Ses adımı" },
