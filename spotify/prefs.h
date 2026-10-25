@@ -54,6 +54,7 @@ typedef enum {
     PREF_SLEEP_ACTION,
     PREF_BATTERY,
     PREF_CPU,
+    PREF_GAME_AUDIO,  /* optional GAME PRX; default OFF */
     PREF_CONNECT,
     /* Controls */
     PREF_CONFIRM,
