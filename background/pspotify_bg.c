@@ -10,6 +10,7 @@
 #include <pspkernel.h>
 #include <pspiofilemgr.h>
 #include <pspaudio.h>
+#include <pspctrl.h>
 #include <pspthreadman.h>
 #include <pspsdk.h>
 #include <stdint.h>
@@ -22,6 +23,24 @@ PSP_MAIN_THREAD_ATTR(0);
 #define BG_FILE  "ms0:/seplugins/pspotify_bg/music.wav"
 #define BG_CONF  "ms0:/seplugins/pspotify_bg/config.txt"
 #define BG_LOG   "ms0:/seplugins/pspotify_bg/status.log"
+#define BG_ENABLE "ms0:/seplugins/pspotify_bg/enabled.txt"
+
+/* Numbered WAV slots: next/previous shortcuts cycle through existing files.
+ * The old single music.wav remains a backwards-compatible fallback. */
+static const char *const bg_names[] = {
+    "ms0:/seplugins/pspotify_bg/music01.wav",
+    "ms0:/seplugins/pspotify_bg/music02.wav",
+    "ms0:/seplugins/pspotify_bg/music03.wav",
+    "ms0:/seplugins/pspotify_bg/music04.wav",
+    "ms0:/seplugins/pspotify_bg/music05.wav",
+    "ms0:/seplugins/pspotify_bg/music06.wav",
+    "ms0:/seplugins/pspotify_bg/music07.wav",
+    "ms0:/seplugins/pspotify_bg/music08.wav",
+    "ms0:/seplugins/pspotify_bg/music.wav"
+};
+#define BG_MAX_TRACKS 9
+static unsigned char bg_tracks[BG_MAX_TRACKS];
+static int bg_track_count;
 #define BG_FRAMES 1024
 #define BG_RATE   44100
 #define BG_PCM_BYTES (BG_FRAMES * 4)
@@ -120,12 +139,8 @@ static int bg_fill(SceUID fd, BgWav *wav)
     memset(bg_out, 0, sizeof bg_out);
 
     while (filled < BG_FRAMES && !bg_stop) {
-        if (wav->remaining < bytes_per_frame) {
-            if (!bg_loop) break;
-            if (sceIoLseek32(fd, wav->data_offset, PSP_SEEK_SET) < 0)
-                break;
-            wav->remaining = wav->data_bytes;
-        }
+        if (wav->remaining < bytes_per_frame)
+            break; /* End of current track: outer loop advances playlist. */
 
         unsigned int take = (unsigned int)(BG_FRAMES - filled) * bytes_per_frame;
         if (take > wav->remaining) take = wav->remaining;
@@ -184,71 +199,178 @@ static void bg_load_settings(void)
     }
 }
 
+/* Independent of the app's settings.ini. Absent/invalid file = OFF.
+ * This prevents the plugin from playing merely because it is in PLUGINS.TXT. */
+static int bg_enabled(void)
+{
+    char b = 0;
+    SceUID fd = sceIoOpen(BG_ENABLE, PSP_O_RDONLY, 0);
+    if (fd < 0) return 0;
+    int read = sceIoRead(fd, &b, 1);
+    sceIoClose(fd);
+    return read == 1 && b == '1';
+}
+
+static void bg_scan_tracks(void)
+{
+    bg_track_count = 0;
+    for (int i = 0; i < BG_MAX_TRACKS - 1; ++i) {
+        SceUID fd = sceIoOpen(bg_names[i], PSP_O_RDONLY, 0);
+        if (fd >= 0) {
+            sceIoClose(fd);
+            bg_tracks[bg_track_count++] = (unsigned char)i;
+        }
+    }
+    if (!bg_track_count) {
+        SceUID fd = sceIoOpen(bg_names[BG_MAX_TRACKS - 1], PSP_O_RDONLY, 0);
+        if (fd >= 0) {
+            sceIoClose(fd);
+            bg_tracks[0] = BG_MAX_TRACKS - 1;
+            bg_track_count = 1;
+        }
+    }
+}
+
+static SceUID bg_open_track(int at, BgWav *wav)
+{
+    if (at < 0 || at >= bg_track_count) return -1;
+    const char *name = bg_names[bg_tracks[at]];
+    SceUID fd = sceIoOpen(name, PSP_O_RDONLY, 0);
+    if (fd < 0) return -1;
+    if (bg_parse_wav(fd, wav) < 0) {
+        bg_log("BG: invalid playlist WAV; PCM16 44100 Hz required");
+        sceIoClose(fd);
+        return -1;
+    }
+    bg_log("BG: track opened");
+    return fd;
+}
+
+/* SELECT+R = next, SELECT+L = previous, SELECT+SQUARE = pause/resume.
+ * Edge triggered; holding keys does not repeatedly skip tracks. Controls
+ * are READ-ONLY: the game will still see the buttons. Avoid game menus. */
+static int bg_hotkey(void)
+{
+    static int old_chord;
+    SceCtrlData pad;
+    if (sceCtrlPeekBufferPositive(&pad, 1) < 1) return 0;
+    unsigned keys = pad.Buttons;
+    int chord = 0;
+    if (keys & PSP_CTRL_SELECT) {
+        if (keys & PSP_CTRL_RTRIGGER) chord = 1;
+        else if (keys & PSP_CTRL_LTRIGGER) chord = -1;
+        else if (keys & PSP_CTRL_SQUARE) chord = 2;
+    }
+    int result = chord && chord != old_chord ? chord : 0;
+    old_chord = chord;
+    return result;
+}
+
 static int bg_main_thread(SceSize args, void *argp)
 {
     (void)args; (void)argp;
     bg_log("BG: worker started");
-    SceUID wav_fd = sceIoOpen(BG_FILE, PSP_O_RDONLY, 0);
-    if (wav_fd < 0) {
-        bg_log("BG: music.wav missing; game continues normally");
-        return 0;
-    }
 
-    BgWav wav;
-    if (bg_parse_wav(wav_fd, &wav) < 0) {
-        bg_log("BG: invalid WAV; use PCM16, 44100Hz, mono/stereo");
-        sceIoClose(wav_fd);
-        return 0;
-    }
-
-    /* Give the game a chance to reserve its own channels first.
-     * Never preempt the game's boot sequence just to start our music. */
-    bg_log("BG: waiting 4 seconds for game audio initialization");
+    /* PSPotify is also a GAME homebrew: never play the test WAV over its
+     * own Spotify player. Wait for the app module to load before deciding. */
+    bg_log("BG: waiting 4 seconds for game startup");
     for (int i = 0; i < 40 && !bg_stop; ++i)
         sceKernelDelayThread(100000);
-    if (bg_stop) {
-        sceIoClose(wav_fd);
+    if (bg_stop) return 0;
+    if (sceKernelFindModuleByName("PSPotify ME") != NULL) {
+        bg_log("BG: PSPotify application detected, skipping game soundtrack");
+        return 0;
+    }
+    if (!bg_enabled()) {
+        bg_log("BG: game music is OFF in PSPotify settings");
         return 0;
     }
 
-    /* First try a spare PSP hardware PCM channel (game audio preserved). */
+    bg_scan_tracks();
+    if (!bg_track_count) {
+        bg_log("BG: no music01..08.wav or music.wav found");
+        return 0;
+    }
+
+    /* Prefer a spare PCM channel; do not hijack the game's output. */
     int channel = sceAudioChReserve(PSP_AUDIO_NEXT_CHANNEL, BG_FRAMES,
                                     PSP_AUDIO_FORMAT_STEREO);
     int use_src = 0;
     if (channel < 0) {
-        /* A separate SRC channel is a fallback; it can also be occupied. */
         if (sceAudioSRCChReserve(BG_FRAMES, BG_RATE, 2) >= 0) {
             use_src = 1;
             bg_log("BG: fallback SRC channel acquired");
         } else {
             bg_log("BG: no audio channel; game continues normally");
-            sceIoClose(wav_fd);
             return 0;
         }
     } else {
         bg_log("BG: spare PCM channel acquired");
     }
 
-    bg_log("BG: audio playback started");
+    bg_log("BG: game music enabled; SELECT+L/R skip, SELECT+SQUARE pause");
     int audio_volume = PSP_AUDIO_VOLUME_MAX * bg_volume / 100;
-    while (!bg_stop) {
-        int count = bg_fill(wav_fd, &wav);
-        if (!count || bg_stop) break;
+    int at = 0, paused = 0, played = 0, invalid = 0;
+    SceUID wav_fd = -1;
+    BgWav wav;
+    memset(&wav, 0, sizeof wav);
 
-        int result = use_src ?
-           sceAudioSRCOutputBlocking(audio_volume, bg_out) :
-           sceAudioOutputBlocking(channel, audio_volume, bg_out);
-        if (result < 0) {
-            bg_log("BG: audio output failed; stopping safely");
-            break;
+    while (!bg_stop) {
+        int cmd = bg_hotkey();
+        if (cmd == 2) {
+            paused = !paused;
+            bg_log(paused ? "BG: paused" : "BG: resumed");
+        } else if (cmd == 1 || cmd == -1) {
+            if (wav_fd >= 0) sceIoClose(wav_fd);
+            wav_fd = -1;
+            at = (at + (cmd == 1 ? 1 : bg_track_count - 1)) % bg_track_count;
+            invalid = 0;
+            bg_log(cmd == 1 ? "BG: next track" : "BG: previous track");
         }
-        if (!bg_loop && wav.remaining == 0) break;
+        if (paused) {
+            sceKernelDelayThread(30000);
+            continue;
+        }
+        if (wav_fd < 0) {
+            wav_fd = bg_open_track(at, &wav);
+            if (wav_fd < 0) {
+                ++invalid;
+                if (invalid >= bg_track_count) {
+                    bg_log("BG: no valid WAV files");
+                    break;
+                }
+                at = (at + 1) % bg_track_count;
+                continue;
+            }
+            invalid = 0;
+            ++played;
+            bg_log("BG: audio playback started");
+        }
+
+        int frames = bg_fill(wav_fd, &wav);
+        if (bg_stop) break;
+        if (frames > 0) {
+            int result = use_src ?
+                sceAudioSRCOutputBlocking(audio_volume, bg_out) :
+                sceAudioOutputBlocking(channel, audio_volume, bg_out);
+            if (result < 0) {
+                bg_log("BG: audio output failed; stopping safely");
+                break;
+            }
+        }
+        if (wav.remaining < (unsigned)(wav.channels * 2) || !frames) {
+            sceIoClose(wav_fd);
+            wav_fd = -1;
+            if (!bg_loop && at == bg_track_count - 1) break;
+            at = (at + 1) % bg_track_count;
+        }
     }
 
+    if (wav_fd >= 0) sceIoClose(wav_fd);
     if (use_src) sceAudioSRCChRelease();
     else sceAudioChRelease(channel);
-    sceIoClose(wav_fd);
     bg_log("BG: worker stopped");
+    (void)played;
     return 0;
 }
 
