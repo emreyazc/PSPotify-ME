@@ -96,19 +96,31 @@ static uint16_t cvt16(int fmt, unsigned r, unsigned g, unsigned b)
     return (uint16_t)(0xf000u|(r>>4)|((g>>4)<<4)|(b>>4)<<8);
 }
 typedef struct { uint8_t *p; int stride, fmt; } Canvas;
-static void dot(Canvas *f, int x, int y, uint32_t color)
+/* Fast clipped rectangle writes. Computing colour conversion once per
+ * rect (instead of per pixel) keeps the display-flip syscall inexpensive. */
+static void rect(Canvas *f, int x, int y, int w, int h, uint32_t color)
 {
-    if (x < 0 || x >= 480 || y < 0 || y >= 272 || x >= f->stride) return;
-    if (f->fmt == 3) ((uint32_t *)f->p)[y*f->stride+x] = color;
-    else {
-        unsigned r = color & 255, g = (color>>8)&255, b = (color>>16)&255;
-        ((uint16_t *)f->p)[y*f->stride+x] = cvt16(f->fmt,r,g,b);
+    int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+    int x1 = x + w > 480 ? 480 : x + w;
+    int y1 = y + h > 272 ? 272 : y + h;
+    if (x1 > f->stride) x1 = f->stride;
+    if (x0 >= x1 || y0 >= y1) return;
+
+    if (f->fmt == 3) {
+        for (int py = y0; py < y1; ++py) {
+            uint32_t *dst = (uint32_t *)f->p + py * f->stride + x0;
+            for (int px = x0; px < x1; ++px) *dst++ = color;
+        }
+    } else {
+        const unsigned r = color & 255u;
+        const unsigned g = (color >> 8) & 255u;
+        const unsigned b = (color >> 16) & 255u;
+        const uint16_t value = cvt16(f->fmt, r, g, b);
+        for (int py = y0; py < y1; ++py) {
+            uint16_t *dst = (uint16_t *)f->p + py * f->stride + x0;
+            for (int px = x0; px < x1; ++px) *dst++ = value;
+        }
     }
-}
-static void rect(Canvas *f,int x,int y,int w,int h,uint32_t color)
-{
-    for (int py=y;py<y+h;++py)
-        for(int px=x;px<x+w;++px) dot(f,px,py,color);
 }
 static const uint8_t *rows(char c)
 {
