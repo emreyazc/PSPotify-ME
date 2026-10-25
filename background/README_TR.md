@@ -4,6 +4,18 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## BG-10 — Oyun tuşlarının menüye hapsedilmesi ve sahne geçişinde menü (25 Ekim 2026)
+
+**Son gerçek cihaz raporu:** Önceki menü düzeltmesi sonrası normal oyun sahnesinde menü sabit, müzik/oyun sesleri bağımsız ayarlanıyor, önceki/sonraki parça çalışıyor. **Açık sorunlar:** Menü tuşları oyuna da gidiyordu; oyun sahnesi değiştiğinde menü gidip geliyordu. Bunlar yeni koddan önce raporlandı; **aşağıdaki düzeltmeler henüz PSP'de denenmedi.**
+
+**Yeni giriş yakalama:** `background/bg_input.c` içinde GAME ortamındaki `sceCtrlReadBufferPositive`, `sceCtrlPeekBufferPositive`, negatif eşdeğerleri ve `sceCtrlRead/PeekLatch` için ARK-5 syscall yönlendirmeleri var. Menüyü kontrol eden PRX worker gerçek tuşları okumaya devam eder; menü açıkken oyun `Buttons=0`, analog ortada olacak şekilde nötr giriş görür. SELECT+ÜÇGEN açılış kombinasyonu da oyuna verilmemeye çalışılır. Menüyü kapatırken hâlâ basılı tuşlar tümü serbest bırakılana kadar gizlenir. Oyun kendi kontrolcü API çağrılarını bypass ederse bu önlem yeterli olmayabilir. `status.log` içinde `BG: controller capture installed for game menu` veya `WARNING controller capture unavailable` aranmalı. Diğer controller PRX'leriyle hook çakışması olabilir.
+
+**Yeni görüntüleme:** `background/bg_overlay.c` içinde yeni kare `sceDisplaySetFrameBuf` kancasından gelince çizim yapılmaya devam eder; ayrıca **her vblank'te aktif VRAM görüntüsü yeniden boyanır**. Sahne geçişlerinde karelerin sonradan menüyü silmesini azaltmaya yöneliktir. RAM içindeki veya bilinmeyen framebuffer bölgelerine yazmaz; her oyunda kesin kesintisiz çizim garantisi yok.
+
+**Yalnızca PRX değişir.** PSPotify `EBOOT.PBP`, eski WAV'lar ve mevcut `enabled.txt`/`mixer.txt` değişmeden kalır. `master` değiştirilmedi.
+
+**Test sırası:** (1) PRX'i temiz derle, (2) eski PRX'i yedekle ve yenisini kopyala, (3) PSP'yi tamamen yeniden başlatıp aynı oyunu aç, (4) SELECT+ÜÇGEN ile menüyü aç, yukarı/aşağı/sol/sağ/X kombinasyonlarını kullan; **oyundaki karakter/kamera/menü hiç hareket etmemeli**, (5) menüyü O ile kapat, **oyun kontrolü normal çalışmalı**, (6) oyun içi sahne/menü değiştirerek overlay'in görünür kalmasını 30 saniye izle, (7) oyun ve müzik sesinin önceki gibi ayrı değiştiğini doğrula. Bir donma veya devamlı kontrol engeli olursa BG plugin satırını `off` yap ve tamamen yeniden başlat; `pspotify_bg.prx.pre-menu.bak` yedeğine dön.
+
 ## BG-09 — Titreyen menüye yönelik senkron görüntüleme düzeltmesi
 
 **Cihaz bulgusu (25 Ekim 2026):** Oyun sırasında `SELECT+ÜÇGEN` menüsü açıldı; ancak sürekli titriyor / görünür-kaybolur hâlde. Eski kod her 8,5 ms'de o anda ekranda bulunan tek framebuffer'a çiziyordu. Oyunun çift tamponlu çizimi menünün üstüne yeni kare getirdiği için bu yaklaşım doğal olarak kararsızdı.
