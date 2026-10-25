@@ -1,6 +1,6 @@
 # PSPotify ME — Background Playback / Oyun Sırasında Arka Planda Çalma
 
-**Durum:** Araştırma ve teknik fizibilite / deney planı. **Henüz PRX kodu, otomatik kurulum veya çalışan oyun içi Spotify oynatımı yok.**
+**Durum:** Bağımsız oyun içi WAV oynatan **deneysel GAME PRX kodu** (`background/pspotify_bg.c`), derleme/CI ve geri alma belgeleri branch'e eklendi. **PSP-3000 üzerinde henüz çalıştığı test edilmedi. Spotify akışı ve otomatik oyun sesini kısma henüz mevcut değil.** Kurulum: [background/README_TR.md](../background/README_TR.md).
 
 **Hedef cihaz:** PSP-3000, sistem yazılımı 6.61, ARK-5.
 **Ayrı geliştirme dalı:** `feature/background-audio-prx`.
@@ -67,6 +67,6 @@
 
 ## İlk uygulama kararı
 
-Bir sonraki kod değişikliği, mevcut PSPotify motoruna dokunmadan, `background/` altında küçük bir GAME PRX laboratuvarı açmak ve **BG-00/BG-01/BG-02** için manuel test paketi üretmek olmalı. Bu eşiği aşamayan bir prototipe Spotify/TLS/Media Engine karmaşıklığı eklenmeyecek.
+İlk kod değişikliği tamamlandı: `background/` altında **yerel WAV müzik oynatan bağımsız GAME PRX** kaynağı ve `scripts/build_background.py` oluşturuldu. Bu prototip yalnızca `BG-00/01/02/03` (PRX yükleme, kısa müzik, ayrı müzik ses ayarı/oyun içinden mute) sınaması içindir; otomatik oyun sesi hook'u ya da Spotify entegrasyonu **yok**. İlk test paketi derlenip PSP'de doğrulanmadan Spotify/TLS/Media Engine karmaşıklığı eklenmeyecek.
 
-**Araştırma tarihi:** 25 Ekim 2026. **Mevcut durum:** Branch ve deney planı hazır; henüz derleme, PRX veya gerçek PSP testi yapılmadı.
+**Araştırma tarihi:** 25 Ekim 2026. **Mevcut durum:** İlk PRX kodu ve derleme paketi commit'lendi; gerçek PSP testi yapılmadı.
