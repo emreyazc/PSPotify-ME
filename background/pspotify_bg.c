@@ -514,7 +514,7 @@ int module_start(SceSize args, void *argp)
     (void)args; (void)argp;
     bg_stop = 0;
     bg_load_settings();
-    bg_log("BG: module loaded (GAME); no hooks / no flash changes");
+    bg_log("BG: module loaded (GAME); framebuffer menu and audio volume hooks experimental");
     bg_thread = sceKernelCreateThread("pspotify_bg_audio", bg_main_thread,
                                        0x28, 0x3000, 0, NULL);
     if (bg_thread < 0) {
