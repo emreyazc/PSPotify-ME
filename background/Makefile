@@ -9,7 +9,7 @@ USE_KERNEL_LIBS = 1
 USE_KERNEL_LIBC = 1
 CFLAGS = -Os -G0 -Wall -Wextra -std=c99 -fno-builtin-printf
 LDFLAGS = -nostartfiles
-LIBS = -lpspaudio -lpspkernel -lc
+LIBS = -lpspaudio -lpspctrl_driver -lpspkernel -lc
 
 PSPSDK := $(shell psp-config --pspsdk-path)
 include $(PSPSDK)/lib/build.mak
