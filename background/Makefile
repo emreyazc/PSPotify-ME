@@ -1,6 +1,6 @@
 # Only builds the standalone GAME plugin. No EBOOT changes.
 TARGET = pspotify_bg
-OBJS = pspotify_bg.o bg_audio.o bg_overlay.o systemctrl_stubs.o
+OBJS = pspotify_bg.o bg_audio.o bg_overlay.o bg_input.o systemctrl_stubs.o
 BUILD_PRX = 1
 PRX_EXPORTS = exports.exp
 PSP_FW_VERSION = 500
