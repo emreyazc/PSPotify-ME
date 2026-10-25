@@ -84,3 +84,16 @@
 - `background/README_TR.md`: EBOOT ve PRX çift güncelleme, cihaz testleri ve kurtarma talimatları.
 
 **Önemli:** Yeni kontrol tuşları şu anda Spotify kuyruğuna erişmez; ses kaynağı yerel WAV'dır. Spotify akışını oyun içinde sağlayabilmek için ayrı çalışma ortamında WLAN/TLS/Ogg Vorbis/kimlik yenileme ve ses sahipliği çalışmalarının gerçek cihazda tamamlanması gerekir. Açık/Kapalı ayarı altyapıyı hazırlar; **bu aşamada Spotify'ın oyun arkasında çaldığını iddia etmiyoruz.** Cihaz sonuçlarına göre PRX ve EBOOT ayrı merge kararı verilecek.
+
+
+## BG-05 — Oyun içi VSH tarzı menü ve bağımsız ses kontrolü (yeni deney, TEST EDİLMEDİ)
+
+**Kod:** `background/bg_overlay.c` ve `bg_audio.c`, `SystemCtrlForKernel` için `systemctrl_stubs.S`, güncellenmiş `pspotify_bg.c` ve `Makefile`.
+
+- GAME bağlamında **SELECT+ÜÇGEN** menüyü açar ve kapar; MUSIC ON/OFF, MUSIC VOL, GAME VOL, NEXT/PREV TRACK, PAUSE/PLAY.
+- Menü oyunun mevcut framebuffer'ına basit 5x7 bitmap karakterlerle çizilir. 565/5551/4444/8888 formatları ve yalnızca 2 MiB VRAM aralığına sınırlandırılır; bilinmeyen belleğe yazmayı reddeder.
+- Ayrı çizim thread'i açılır ve `module_stop` sırasında kapatılır. Oyun girişleri yakalanıp engellenmez; tuş çakışması mümkündür.
+- Oyun sesinin bağımsız 0–100 düzeyinde değişmesi için PSP CFW ses çıkış syscall'ları gerekli NID bulunursa patch edilir; oyun ses parametreleri kısılır, kendi arka plan müzik thread'i etkilenmez. **Bu deneysel kernel hook, bazı oyunlarda çökme riski taşıyabilir.** Varsayılan GAME VOL=100.
+- Menüden GAME/MUSIC VOL değiştirmek `mixer.txt` ile, aç/kapat `enabled.txt` ile kaydedilir; PSPotify arayüzü açılışta durumu okur.
+- İlk oyun içi WAV/karma ses deneyinin PASS sonucu, **bu yeni menü/hook sürümü için PASS anlamına gelmez**. Yeni kod henüz temiz derleme ve PSP cihaz doğrulamasından geçmedi. `master` değiştirilmedi.
+- Derleme ve **geri alma** yönergesi: [background/README_TR.md](../background/README_TR.md). Gerçek Spotify akışı PRX'e taşınmadı; menüdeki parçalar yerel WAV'dır.
