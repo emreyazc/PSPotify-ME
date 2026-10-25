@@ -541,5 +541,9 @@ int module_stop(SceSize args, void *argp)
         sceKernelDeleteThread(bg_thread);
         bg_thread = -1;
     }
+    /* Failsafe after an interrupted audio thread: no stale draw worker
+     * or patched audio syscall may survive the plugin unload. */
+    bg_overlay_stop();
+    bg_game_audio_shutdown();
     return 0;
 }
