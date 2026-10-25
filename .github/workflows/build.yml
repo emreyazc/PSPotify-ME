@@ -52,12 +52,14 @@ jobs:
           import wave
           p = Path("dist/background/pspotify_bg.prx")
           assert p.is_file() and p.stat().st_size > 100, "missing PRX"
-          with wave.open("dist/background/music.wav", "rb") as w:
-              assert w.getnchannels() == 2
-              assert w.getsampwidth() == 2
-              assert w.getframerate() == 44100
-              assert w.getnframes() > 44100
-          print("BACKGROUND ARTIFACT CHECK PASS")
+          for wavname in ("music.wav", "music01.wav", "music02.wav", "music03.wav"):
+              with wave.open("dist/background/" + wavname, "rb") as w:
+                  assert w.getnchannels() == 2, wavname
+                  assert w.getsampwidth() == 2, wavname
+                  assert w.getframerate() == 44100, wavname
+                  assert w.getnframes() > 44100, wavname
+          assert Path("dist/background/enabled-default-off.txt").read_text().strip() == "0"
+          print("BACKGROUND PRX AND THREE TRACKS CHECK PASS")
           PY
       - name: Upload GAME PRX test artifacts
         uses: actions/upload-artifact@v4
