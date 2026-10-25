@@ -414,6 +414,9 @@ static int bg_main_thread(SceSize args, void *argp)
     bg_log(bg_game_audio_available() ? "BG: game audio hooks active" :
                                       "BG: game audio hooks unavailable");
     if (bg_overlay_start() < 0) bg_log("BG: overlay draw thread failed");
+    else bg_log(bg_overlay_flip_hook_available() ?
+                "BG: display flip hook installed; synchronized overlay" :
+                "BG: no display hook, vblank polling fallback");
 
     bg_scan_tracks();
     int enabled = bg_enabled(),paused = 0,row = 0,at = 0,invalid = 0;
