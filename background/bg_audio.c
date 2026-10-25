@@ -27,7 +27,9 @@ static int scaled(int volume)
 {
     if (bg_music_is_own_thread() || game_volume >= 100) return volume;
     if (volume <= 0) return volume;
-    return (int)(((long long)volume * game_volume) / 100);
+    /* PSP audio volume is 0..0x8000: volume * 100 fits signed 32-bit.
+     * Avoid 64-bit division (__divdi3), unavailable in this kernel PRX. */
+    return (volume * game_volume) / 100;
 }
 
 static int out(int ch, int vol, void *buf)
