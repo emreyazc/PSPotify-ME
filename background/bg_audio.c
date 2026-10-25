@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include "bg_audio.h"
 
-typedef unsigned int u32;
+/* u32 is already defined by the PSP SDK's psptypes.h. */
 extern u32 sctrlHENFindFunction(char *modname, char *libname, u32 nid);
 extern void sctrlHENPatchSyscall(void *oldfunc, void *newfunc);
 
