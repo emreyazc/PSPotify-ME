@@ -21,10 +21,18 @@ def main():
     DIST.mkdir(parents=True, exist_ok=True)
     shutil.copy2(prx, DIST / "pspotify_bg.prx")
     shutil.copy2(SOURCE / "config.txt", DIST / "config.txt")
-    subprocess.run([
-        sys.executable, str(ROOT / "scripts" / "create_background_sample.py"),
-        "--output", str(DIST / "music.wav"),
-    ], check=True)
+    generator = str(ROOT / "scripts" / "create_background_sample.py")
+    # Keep legacy single-file playback, plus three distinct test songs.
+    for name, pitch in (("music.wav", "1.0"),
+                        ("music01.wav", "1.0"),
+                        ("music02.wav", "1.25"),
+                        ("music03.wav", "1.5")):
+        subprocess.run([
+            sys.executable, generator,
+            "--output", str(DIST / name), "--pitch", pitch,
+        ], check=True)
+    # Safe starting state. Never overwrite a user's enabled.txt automatically.
+    (DIST / "enabled-default-off.txt").write_text("0\n", encoding="ascii")
     print("BACKGROUND PRX BUILT (not PSP-tested)")
     print("Files in:", DIST)
 
