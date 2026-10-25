@@ -4,6 +4,43 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## Yeni oyun içi mini menü (deneysel — PSP doğrulaması bekleniyor)
+
+PSP oyunu içindeyken **SELECT + ÜÇGEN (△)** ile VSH tarzı siyah/yeşil PSPotify BG menüsünü aç/kapat. Menü GAME PRX'inde çalışır; XMB `vsh` ve PS1 `pops` ortamlarına kurulmaz.
+
+| Kontrol | Görev |
+| --- | --- |
+| SELECT + △ | Oyun içi menüyü aç/kapat |
+| ↑ / ↓ | Menüde satır seç |
+| ← / → | Seçili müzik/oyun sesini %10 değiştir veya müziği aç/kapat |
+| X | Aç/kapat, sonraki, önceki veya duraklat işlevini çalıştır |
+| O | Menüyü kapat |
+
+Menü satırları: **MUSIC** (ON/OFF), **MUSIC VOL** (0–100%), **GAME VOL** (0–100%), **NEXT TRACK**, **PREV TRACK**, **PAUSE / PLAY**.
+
+**Oyun sesini ayrı kısmak için** ARK-5 `SystemCtrlForKernel` kancası kullanılıyor ve PSP'nin bilinen `sceAudioOutput`, `sceAudioOutputBlocking`, panned, SRC ve Audio2 syscall girişlerinde oyunun ses parametreleri oransal azaltılıyor. Bu hook'lar önceki, doğrulanmış WAV PRX sürümünden farklı olarak **yeni ve donma riski olan** deneysel kod. Varsayılan GAME VOL **100%** (değişiklik yok). GAME VOL satırında `GAME AUDIO HOOK UNAVAILABLE` yazarsa CFW'de kanca kurulamamıştır; sağ/sol hiçbir değişiklik yapmaz. Bazı oyunların doğrudan ses sürücülerini veya desteklenmeyen çıkış yollarını kullanması nedeniyle **bütün sesler kısılmayabilir**. **Spotify BG müzik çıkışı** kendi thread'i üzerinden hook'tan muaf tutulur; müzik sesi ayrı ayarlanır.
+
+`MUSIC` seçimi, PSPotify'deki aç/kapat ayarıyla aynı `enabled.txt` dosyasına yazılır. `mixer.txt` dosyası ayrı iki ses düzeyini kaydeder ve sonraki oyunda hatırlar. Menü oyun sırasında `MUSIC=OFF` olsa bile açılabilir; müzik kanalı kapatılır fakat küçük kontrol thread'i açık kalır. Oyun içindeki değişiklik PSPotify yeniden açıldığında da ayarda görüntülenir.
+
+Oyun tuşları menü tarafından engellenmez; oyun aynı tuş girişlerini de görebilir. Bir oyunda SELECT+△ çakışırsa kullanımı durdur ve bildir. Menü ekranı mevcut framebuffer'a yazılarak çizilir; oyun 16-bit/32-bit veya alışılmadık görüntü güncelleme yolu kullanıyorsa menü titreyebilir, hatta görünmeyebilir. Bu aşamada **flicker/uyumluluk garantisi verilmiyor**.
+
+### Yeni PRX'i kurmadan önce (kritik)
+
+**Önce çalışan eski dosyaların yedeğini al.** PSP'de USB sürücüsü F: varsayımı:
+
+```powershell
+Copy-Item "F:\SEPLUGINS\pspotify_bg\pspotify_bg.prx" "F:\SEPLUGINS\pspotify_bg\pspotify_bg.prx.pre-menu.bak" -Force
+Copy-Item "F:\PSP\GAME\CAT_Araclar\PSPOTIFY\EBOOT.PBP" "F:\PSP\GAME\CAT_Araclar\PSPOTIFY\EBOOT.PBP.pre-menu.bak" -Force
+```
+
+Mevcut `PLUGINS.TXT` satırları ve `category_lite.prx` korunur. EBOOT değişimi yalnızca yeni Ayarlar sayfası ve oyun içi aç/kapat eşitlemesi içindir. `master` üzerinde birleştirme **yapılmadı**.
+
+**İlk test sırası:** (1) PRX ve yeni EBOOT temiz derleme, (2) müzik Kapalıyken oyuna gir → SELECT+△ menüsü, (3) menüden MUSIC Açık → WAV çalıyor, (4) MUSIC VOL 70→30 ayarı ile yalnızca müzik kısılıyor, (5) GAME VOL 100→50→0 ile oyun sesi kısılıyor ancak müzik çalıyor, (6) ileri/geri/duraklat, (7) menüyü kapatıp XMB'ye dön ve PSPotify aç → aç/kapat durumu korunmuş.
+
+**Acil geri alma:** Ses kesilirse veya oyun donarsa `F:\SEPLUGINS\PLUGINS.TXT` içindeki yalnızca PSPotify BG `game, ...` satırını `off` yap; PSP'yi tamamen kapat/aç. Ardından `pspotify_bg.prx.pre-menu.bak` dosyasını eski adına geri kopyalayabilirsin. XMB'den açılan normal PSPotify uygulaması PRX'den bağımsızdır ve temiz `master` EBOOT yedeğine döndürülebilir.
+
+**Kapsam sınırı:** Bu PRX şu anda oyun içinde **yerel WAV dosyaları** çalar ve onların önceki/sonraki/parça sesini kontrol eder. **Spotify'ın gerçek akışını oyun sırasında oynatmaz veya Spotify kuyruğunu yönetmez.** Wi-Fi/Ogg/Spotify oturum devamı sonraki, ayrı teknik aşamadır.
+
 ## Yeni özellikler: PSPotify ayarından aç/kapat ve oyun içi şarkı değiştirme
 
 **Henüz gerçek Spotify akışı yok.** Bu geliştirme, oynatma durumunu ve tuş kontrollerini gerçek PSP'de doğrulamak için yerel WAV örneklerini kullanıyor. PSPotify uygulamasında **Ayarlar → Oynatma → Oyun müziği (WAV testi)** adında yeni bir **Kapalı / Açık** tercihi var. Varsayılan **Kapalı**.
