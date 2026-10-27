@@ -362,6 +362,20 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at)
     const unsigned pressed = btn & ~old;
     old = btn;
 
+    /* Emergency exit when the menu cannot be read: SELECT+START always
+     * hides it and resumes the saved game user threads. */
+    if (bg_overlay_visible() &&
+        (btn & (PSP_CTRL_SELECT|PSP_CTRL_START)) ==
+            (PSP_CTRL_SELECT|PSP_CTRL_START) &&
+        (pressed & (PSP_CTRL_SELECT|PSP_CTRL_START))) {
+        bg_overlay_show(0);
+        bg_pause_resume();
+        bg_flush_deferred_settings();
+        bg_input_guard_release();
+        bg_log("BG: emergency SELECT+START game resume");
+        return 0;
+    }
+
     if ((btn & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE)) ==
                (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE) &&
         (pressed & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE))) {
