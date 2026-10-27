@@ -507,6 +507,9 @@ static int bg_main_thread(SceSize args, void *argp)
     bg_log("BG: SELECT+TRIANGLE menu; no Spotify streaming yet");
 
     while (!bg_stop) {
+        /* Independent overlay watchdog can recover game freeze if this
+         * thread hangs in an unexpected driver call. */
+        bg_overlay_heartbeat();
         const int command = bg_controls(&enabled,&paused,&row,&at,
                                         channel >= 0 || use_src || wav_fd >= 0);
         bg_overlay_state(enabled,bg_volume,bg_game_audio_volume(),
