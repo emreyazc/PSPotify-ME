@@ -16,25 +16,26 @@
 #include "bg_pause.h"
 
 #define BG_MAX_GAME_THREADS 128
-/* Create this small file containing ASCII '0' to turn OFF game freezing
- * without rebuilding PRX. Absent file = feature ON in this test branch. */
+/* Strict opt-in for experimental game freezing. Absent flag defaults OFF.
+ * Create pause-game.txt with ASCII '1' ONLY for deliberate freeze-only tests.
+ * ASCII '0' always disables this feature; restart PSP to reread. */
 #define BG_PAUSE_TOGGLE "ms0:/seplugins/pspotify_bg/pause-game.txt"
 
 static SceUID all_ids[BG_MAX_GAME_THREADS];
 static SceUID suspended_ids[BG_MAX_GAME_THREADS];
 static volatile int suspended_count;
-static volatile int enabled = 1;
+static volatile int enabled = 0;
 
 void bg_pause_init(void)
 {
     suspended_count = 0;
-    enabled = 1;
+    enabled = 0;
     SceUID file = sceIoOpen(BG_PAUSE_TOGGLE, PSP_O_RDONLY, 0);
     if (file >= 0) {
         char flag = 0;
         int n = sceIoRead(file, &flag, 1);
         sceIoClose(file);
-        if (n == 1 && flag == '0') enabled = 0;
+        if (n == 1 && flag == '1') enabled = 1;
     }
 }
 
