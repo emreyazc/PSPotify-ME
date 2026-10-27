@@ -4,6 +4,29 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## BG-11 — Menü açıkken oyun görüntüsü + sesi duraklatma (deneysel, cihaz testi bekliyor)
+
+**İstek:** Yeni menüde görüntü sahne geçişlerinde yanıp sönüyor / yarım kalıyor. Kullanıcı menü açıkken arkadaki oyunun ses ve görüntü olarak tamamen donmasını istiyor.
+
+**Yeni çözüm:** `bg_pause.c`, PSP Kernel ThreadMan API ile GAME programının kullanıcı iş parçacıklarını tespit eder (`SceKernelThreadInfo.attr`: `PSP_THREAD_ATTR_USER`), **yalnızca daha önceden askıya alınmamış** kullanıcı iş parçacıklarını `sceKernelSuspendThread` ile askıya alır. Kimliklerini saklar, menü kapanınca sadece bunları `sceKernelResumeThread` ile geri başlatır. Başka plugin veya sistem tarafından askıda bulunan thread'lere dokunmaz. Kernel threadleri (PSPotify BG worker, menu renderer, ağ/ses çekirdek sürücüleri) askıya alınmaz. Askıya alma başarısız olursa bu denemedeki başarılı duraklatmalar geri alınır ve menü eski canlı çizim modunda açılır.
+
+- MENU **SELECT + ÜÇGEN**: Oyun thread'lerini duraklat, menüyü aç; tekrar basınca menüyü kapat ve oyunu devam ettir.
+- MENU **O**: Menü kapanır, oyun devam eder.
+- **Acil SELECT + START**: Menüde görüntü problemi olsa bile menüyü kapatıp oyunu devam ettirmeyi dener.
+- Ses API kancasında menü açıkken oyun çıkış sesi 0 olur; **PSPotify yerel WAV müziği devam eder**.
+- `mixer.txt` ve `enabled.txt` kaydetme işlemleri, kullanıcı thread'leri duraklatılmışken kilitli dosya işlemlerini tetiklememek için menü kapanana kadar ertelenir.
+- PRX unload edilirse `module_stop` içinde iş parçacıkları geri açılır. **Buna rağmen askıya alma, oyun / CFW kilitlenmesi riski taşır; bütün oyunlarda garantili değildir.**
+
+### Duraklatmayı acilen devre dışı bırakma
+
+`F:\SEPLUGINS\pspotify_bg\pause-game.txt` dosyasının içine tek karakter `0` yaz. Bu dosya mevcut değilse bu deneysel feature branch'te gerçek duraklatma **varsayılan açık**. Önceki davranışa dönmek için PSP'yi yeniden başlat. Daha kapsamlı geri alma için `F:\SEPLUGINS\PLUGINS.TXT` içindeki sadece PSPotify BG `game` satırını `off` yapıp tamamen kapat/aç, çalışan yedek PRX'i geri yükle.
+
+### Kontrollü test
+
+(1) Yeni PRX'i `make -C background clean && python3 scripts/build_background.py` ile derle ve eski PRX'i yedekle. (2) PSP'de kaydın önemli olmadığı bir oyunu **oynanabilir hâle geldikten sonra** aç. (3) SELECT+ÜÇGEN ile menüyü aç: arka planda sahne ve oyun sesi durmalı, müzik WAV devam etmeli; karakter hareket etmemeli. (4) Menüde müzik sesini değiştir ve sonraki WAV'a geç. (5) O ile menüyü kapat: oyun kaldığı yerden devam etmeli, görüntü normale dönmeli. (6) Menüyü ikinci kez aç ve SELECT+START ile acil çıkışı dene. **İlk testte oyun yükleme/UMD video aşamasında duraklatmayı deneme.**
+
+Gerçek cihazda test edilmediği için, derleme başarılı olsa bile bu kodun sorunsuz çalışacağı henüz söylenemez. `master` değişmedi. PSPotify'ın Spotify akışı hâlâ GAME PRX'inde değil; yalnızca mevcut yerel WAV çalar devam eder.
+
 ## BG-10 — Oyun tuşlarının menüye hapsedilmesi ve sahne geçişinde menü (25 Ekim 2026)
 
 **Son gerçek cihaz raporu:** Önceki menü düzeltmesi sonrası normal oyun sahnesinde menü sabit, müzik/oyun sesleri bağımsız ayarlanıyor, önceki/sonraki parça çalışıyor. **Açık sorunlar:** Menü tuşları oyuna da gidiyordu; oyun sahnesi değiştiğinde menü gidip geliyordu. Bunlar yeni koddan önce raporlandı; **aşağıdaki düzeltmeler henüz PSP'de denenmedi.**
