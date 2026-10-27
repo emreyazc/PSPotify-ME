@@ -4,9 +4,28 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## BG-12 — Metal Slug 5 kilitlenmesi: güvenli varsayılan + I/O izolasyonu (2026-10-28)
+
+**Cihaz testi sonucu:** Metal Slug 5 oyun esnasında SELECT+ÜÇGEN menüsü açılıyor, kontrol tuşları oyuna geçmiyor. Müzik KAPALI iken oyun duraklatması ve menü kontrolleri çalışıyor; menü hâlâ yer yer **eksik görünüyor**. Müzik AÇIK yapılınca PSP tamamen kilitlendi ve eski SELECT+START kurtarması başarısız oldu. Bu önemli gerçek cihaz regresyonudur. **BG-11 deneysel oyun durdurması artık varsayılan olarak KAPALI.**
+
+**Muhtemel blokaj:** GAME user thread'leri `sceKernelSuspendThread` ile dondurulmuşken `bg_controls` müzik etkinleştirme mesajını `status.log`'a yazıyor; daha sonra ana döngü WAV açma / rezervasyon / bloklayan ses çıkışı yapıyor. Dondurulmuş bir oyun thread'i ortak servis kilidini tutuyorsa bunlar menüyü kontrol eden işçiyi de durdurabiliyor. Bu kod yolu düzeltildi; sebebin kesin kanıtı için kilitlenme anındaki bir hata izi henüz yok.
+
+**Düzeltmeler:**
+- `pause-game.txt` yoksa deneysel GAME thread durdurması **OFF**. Yalnız dosyanın ilk karakteri `1` ise özel test amacıyla açılır; `0` kapatır. Bu seçenek PSP yeniden başladıktan sonra okunur.
+- Dondurulmuş halde hiçbir `status.log` disk yazımı yapılmaz. Ana döngü oyun dondurulmuşken WAV `sceIoRead`, `sceIoOpen`, audio reserve/release veya output başlatmaz.
+- Müzik ON'a geçiş isteği oyun dondurulmuşken gelirse **önce oyun devam eder**, sonra ses başlar; menü açık kalır. **Gerçek GAME freeze + aktif müzik birlikte desteklenmiyor**. Müzik zaten açıkken menü açılırsa oyun askıya alınmaz.
+- Kontroller / müzik işçisi çalışmayı bırakırsa, bağımsız overlay işçisi 3 saniye sonra menüyü kapatıp askıya alınan thread'leri geri açmayı dener. **Bu best-effort kurtarmadır; kernel/display tamamen kilitlenirse işlemez.**
+- `master` değiştirilmedi. Ses seviyeleri ve parça değiştirme yolu korunuyor.
+
+**Önemli:** Bu commitler PSP'de henüz denenmedi ve otomatik test/derleme sonucu bekliyor. Önce sadece varsayılan **pause OFF** modunda kontrol ve müzik testi yapılmalı. Freeze'i açmadan önce ayrı tasarım kararı gerekiyor: gerçek zamanlı PCM oynatma ile GAME thread durdurma CFW düzeyindeki kilit paylaşımından etkilenebilir.
+
+**Kurtarma:** Halihazırda kilitliyse güç düğmesini yaklaşık 10 saniye tutarak cihazı tamamen kapat. `F:\SEPLUGINS\pspotify_bg\pause-game.txt` dosyasına `0` yaz ve tamamen yeniden başlat. Gerekirse `F:\SEPLUGINS\pspotify_bg\pspotify_bg.prx.before-pause.bak` yedeğine dön. Yeni sürümde dondurmayı tekrar denemek için `1` değeri gerekecek; müzik açıkken oyun yine dondurulmayacak.
+
 ## BG-11 — Menü açıkken oyun görüntüsü + sesi duraklatma (deneysel, cihaz testi bekliyor)
 
 **İstek:** Yeni menüde görüntü sahne geçişlerinde yanıp sönüyor / yarım kalıyor. Kullanıcı menü açıkken arkadaki oyunun ses ve görüntü olarak tamamen donmasını istiyor.
+
+**TARİHSEL NOT: BG-11 varsayılan AÇIK davranışı BG-12'de güvenlik nedeniyle geri alındı.**
 
 **Yeni çözüm:** `bg_pause.c`, PSP Kernel ThreadMan API ile GAME programının kullanıcı iş parçacıklarını tespit eder (`SceKernelThreadInfo.attr`: `PSP_THREAD_ATTR_USER`), **yalnızca daha önceden askıya alınmamış** kullanıcı iş parçacıklarını `sceKernelSuspendThread` ile askıya alır. Kimliklerini saklar, menü kapanınca sadece bunları `sceKernelResumeThread` ile geri başlatır. Başka plugin veya sistem tarafından askıda bulunan thread'lere dokunmaz. Kernel threadleri (PSPotify BG worker, menu renderer, ağ/ses çekirdek sürücüleri) askıya alınmaz. Askıya alma başarısız olursa bu denemedeki başarılı duraklatmalar geri alınır ve menü eski canlı çizim modunda açılır.
 
