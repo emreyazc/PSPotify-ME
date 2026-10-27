@@ -18,6 +18,8 @@
 #include <pspthreadman.h>
 #include <stdint.h>
 #include "bg_overlay.h"
+#include "bg_pause.h"
+#include "bg_input.h"
 
 /* ARK-5 SystemCtrlForKernel; imported by systemctrl_stubs.S. */
 extern u32 sctrlHENFindFunction(char *modname, char *libname, u32 nid);
@@ -83,6 +85,7 @@ static volatile unsigned flip_calls;
 static volatile int painting;
 static volatile unsigned last_flip_us;
 static volatile int hook_installed;
+static volatile unsigned worker_heartbeat_us;
 
 static uint32_t cvt32(unsigned r, unsigned g, unsigned b)
 {
@@ -247,6 +250,16 @@ static int overlay_thread(SceSize args, void *argp)
 {
     (void)args; (void)argp;
     while (running) {
+        /* Independent kernel overlay worker is a last-resort rescue path.
+         * If game threads are suspended and music/controller worker fails to
+         * check in for >=3 seconds, resume GAME threads and hide the menu.
+         * No filesystem or audio calls in this watchdog path. */
+        if (visible && bg_pause_active() &&
+            (unsigned)(sceKernelGetSystemTimeLow() - worker_heartbeat_us) > 3000000u) {
+            visible = 0;
+            bg_pause_resume();
+            bg_input_guard_release();
+        }
         if (!visible) {
             sceKernelDelayThread(30000);
             continue;
@@ -275,6 +288,7 @@ int bg_overlay_start(void)
     painting = 0;
     hook_installed = 0;
     last_flip_us = 0;
+    worker_heartbeat_us = sceKernelGetSystemTimeLow();
     /* No hook is added if the CFW cannot find the official display export. */
     install_flip_hook();
     draw_thread = sceKernelCreateThread("bg_menu_draw", overlay_thread,
@@ -327,6 +341,10 @@ void bg_overlay_stop(void)
  * 0 = poll-only fallback. This is written to status.log outside hook. */
 int bg_overlay_flip_hook_available(void) { return hook_installed; }
 
+void bg_overlay_heartbeat(void)
+{
+    worker_heartbeat_us = sceKernelGetSystemTimeLow();
+}
 void bg_overlay_show(int show){visible=show;}
 int bg_overlay_visible(void){return visible;}
 void bg_overlay_state(int active,int mvol,int gvol,int hooks,int paused,int row,int track)
