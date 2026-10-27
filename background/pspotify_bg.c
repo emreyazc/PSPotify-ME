@@ -15,6 +15,7 @@
 #include "bg_audio.h"
 #include "bg_overlay.h"
 #include "bg_input.h"
+#include "bg_pause.h"
 #include <pspthreadman.h>
 #include <pspsdk.h>
 #include <stdint.h>
@@ -259,8 +260,18 @@ int bg_music_is_own_thread(void)
     return bg_thread >= 0 && sceKernelGetThreadId() == bg_thread;
 }
 
+static int bg_mixer_dirty = 0;
+static int bg_enabled_dirty = 0;
+static int bg_enabled_pending = 0;
+
 static void bg_write_enabled(int on)
 {
+    /* Avoid filesystem writes while game user threads may hold I/O locks. */
+    if (bg_pause_active()) {
+        bg_enabled_pending = on;
+        bg_enabled_dirty = 1;
+        return;
+    }
     SceUID fd = sceIoOpen(BG_ENABLE, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
     if (fd < 0) { bg_log("BG: cannot persist on/off"); return; }
     char c = on ? '1' : '0';
@@ -292,6 +303,10 @@ static void bg_load_mixer(void)
 }
 static void bg_save_mixer(void)
 {
+    if (bg_pause_active()) {
+        bg_mixer_dirty = 1;
+        return;
+    }
     char out[64],num[4];
     int mv = bg_volume, gv = bg_game_audio_volume();
     SceUID fd = sceIoOpen(BG_MIXER, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
@@ -316,6 +331,19 @@ static void bg_save_mixer(void)
     sceIoClose(fd);
 }
 
+static void bg_flush_deferred_settings(void)
+{
+    if (bg_pause_active()) return;
+    if (bg_enabled_dirty) {
+        bg_enabled_dirty = 0;
+        bg_write_enabled(bg_enabled_pending);
+    }
+    if (bg_mixer_dirty) {
+        bg_mixer_dirty = 0;
+        bg_save_mixer();
+    }
+}
+
 /* Low-collision hotkeys. SELECT+TRIANGLE opens the in-game menu.
  * Selecting UP/DOWN and LEFT/RIGHT still reaches the game; on-screen
  * menus are deliberately not using an invasive controller API hook.
@@ -338,13 +366,27 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at)
                (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE) &&
         (pressed & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE))) {
         int show = !bg_overlay_visible();
-        bg_overlay_show(show);
-        if (!show) bg_input_guard_release();
+        if (show) {
+            /* Pause real user GAME threads, never the kernel BG worker,
+             * audio driver, controller reader or menu painter. */
+            int count = bg_pause_game();
+            if (count < 0) bg_log("BG: game pause failed; menu in live mode");
+            else if (count == 0) bg_log("BG: no user game threads to pause");
+            bg_overlay_show(1);
+        } else {
+            bg_overlay_show(0);
+            int resumed = bg_pause_resume();
+            if (resumed > 0) bg_log("BG: game resumed after menu");
+            bg_flush_deferred_settings();
+            bg_input_guard_release();
+        }
         return 0;
     }
     if (bg_overlay_visible()) {
         if (pressed & PSP_CTRL_CIRCLE) {
             bg_overlay_show(0);
+            if (bg_pause_resume() > 0) bg_log("BG: game resumed after menu");
+            bg_flush_deferred_settings();
             bg_input_guard_release();
             return 0;
         }
@@ -414,6 +456,9 @@ static int bg_main_thread(SceSize args, void *argp)
     }
 
     bg_load_mixer();
+    bg_pause_init();
+    bg_log(bg_pause_enabled() ? "BG: experimental GAME thread freeze enabled" :
+                                "BG: game pause disabled via pause-game.txt");
     bg_game_audio_init();
     bg_log(bg_game_audio_available() ? "BG: game audio hooks active" :
                                       "BG: game audio hooks unavailable");
@@ -511,6 +556,9 @@ static int bg_main_thread(SceSize args, void *argp)
         }
     }
 
+    bg_overlay_show(0);
+    bg_pause_resume();
+    bg_flush_deferred_settings();
     bg_input_shutdown();
     bg_overlay_stop(); /* join before GAME tears framebuffer down */
     if (wav_fd >= 0) sceIoClose(wav_fd);
@@ -555,6 +603,8 @@ int module_stop(SceSize args, void *argp)
     }
     /* Failsafe after an interrupted audio thread: no stale draw worker
      * or patched audio syscall may survive the plugin unload. */
+    bg_overlay_show(0);
+    bg_pause_resume(); /* failsafe even if the BG worker was terminated */
     bg_input_shutdown();
     bg_overlay_stop();
     bg_game_audio_shutdown();
