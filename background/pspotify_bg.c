@@ -69,6 +69,9 @@ static uint8_t bg_raw[BG_PCM_BYTES] __attribute__((aligned(64)));
 
 static void bg_log(const char *message)
 {
+    /* Avoid ms0: access while paused user threads may hold filesystem locks.
+     * A blocking log call here can lock the only menu/controller worker. */
+    if (bg_pause_active()) return;
     SceUID fd = sceIoOpen(BG_LOG, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, 0777);
     if (fd < 0) return;
     sceIoWrite(fd, message, (int)strlen(message));
@@ -344,13 +347,10 @@ static void bg_flush_deferred_settings(void)
     }
 }
 
-/* Low-collision hotkeys. SELECT+TRIANGLE opens the in-game menu.
- * Selecting UP/DOWN and LEFT/RIGHT still reaches the game; on-screen
- * menus are deliberately not using an invasive controller API hook.
- *
- * Returns 1=next, -1=previous, 2=pause, 3=toggle enabled.
- */
-static int bg_controls(int *enabled, int *paused, int *row, int *at)
+/* SELECT+TRIANGLE menu. Game controller input is captured in bg_input.c.
+ * Returns 1=next, -1=previous, 2=pause, 3=toggle enabled. */
+static int bg_controls(int *enabled, int *paused, int *row, int *at,
+                       int audio_in_use)
 {
     static unsigned old;
     SceCtrlData pad;
@@ -383,9 +383,15 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at)
         if (show) {
             /* Pause real user GAME threads, never the kernel BG worker,
              * audio driver, controller reader or menu painter. */
-            int count = bg_pause_game();
-            if (count < 0) bg_log("BG: game pause failed; menu in live mode");
-            else if (count == 0) bg_log("BG: no user game threads to pause");
+            /* A frozen game may hold locks needed by audio output and WAV
+             * I/O. Never freeze when our music stream is already in use. */
+            if (*enabled || audio_in_use) {
+                bg_log("BG: live overlay while music/audio channel is active");
+            } else {
+                int count = bg_pause_game();
+                if (count < 0) bg_log("BG: game pause failed; live menu");
+                else if (count == 0) bg_log("BG: no user threads paused");
+            }
             bg_overlay_show(1);
         } else {
             bg_overlay_show(0);
@@ -412,6 +418,13 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at)
         switch (*row) {
         case 0: /* MUSIC switch */
             if (dir || action) {
+                /* Resume GAME before enabling any audio or ms0: operations.
+                 * Menu remains open; control capture stays active. */
+                if (!*enabled && bg_pause_active()) {
+                    bg_pause_resume();
+                    bg_flush_deferred_settings();
+                    bg_log("BG: resumed game before starting music");
+                }
                 *enabled = !*enabled;
                 bg_write_enabled(*enabled);
                 bg_log(*enabled ? "BG: menu music ON" : "BG: menu music OFF");
@@ -494,9 +507,20 @@ static int bg_main_thread(SceSize args, void *argp)
     bg_log("BG: SELECT+TRIANGLE menu; no Spotify streaming yet");
 
     while (!bg_stop) {
-        const int command = bg_controls(&enabled,&paused,&row,&at);
+        const int command = bg_controls(&enabled,&paused,&row,&at,
+                                        channel >= 0 || use_src || wav_fd >= 0);
         bg_overlay_state(enabled,bg_volume,bg_game_audio_volume(),
                          bg_game_audio_available(),paused,row,at);
+
+        /* With GAME suspended, keep only controls/overlay alive; never do
+         * Memory Stick I/O, audio reserve/release or blocking audio output.
+         * Track navigation can update the index without touching the disk. */
+        if (bg_pause_active()) {
+            if ((command == 1 || command == -1) && bg_track_count)
+                at = (at + (command == 1 ? 1 : bg_track_count - 1)) % bg_track_count;
+            sceKernelDelayThread(15000);
+            continue;
+        }
 
         if (command == 1 || command == -1) {
             if (wav_fd >= 0) sceIoClose(wav_fd);
