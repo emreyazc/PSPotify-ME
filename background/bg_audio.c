@@ -13,6 +13,7 @@
 #include <pspthreadman.h>
 #include <stdint.h>
 #include "bg_audio.h"
+#include "bg_overlay.h"
 
 /* u32 is already defined by the PSP SDK's psptypes.h. */
 extern u32 sctrlHENFindFunction(char *modname, char *libname, u32 nid);
@@ -25,7 +26,9 @@ static void *handlers[6];
 
 static int scaled(int volume)
 {
-    if (bg_music_is_own_thread() || game_volume >= 100) return volume;
+    if (bg_music_is_own_thread()) return volume; /* PSPotify WAV continues */
+    if (bg_overlay_visible()) return 0; /* mute queued game output while menu open */
+    if (game_volume >= 100) return volume;
     if (volume <= 0) return volume;
     /* PSP audio volume is 0..0x8000: volume * 100 fits signed 32-bit.
      * Avoid 64-bit division (__divdi3), unavailable in this kernel PRX. */
