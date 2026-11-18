@@ -42,3 +42,14 @@ Do not deploy if either build fails.
 Pass only if: user canary starts, runs in GAME, game and audio remain stable, and canary stops/unloads on returning to XMB; otherwise preserve exact error logs and mark inconclusive/fail. Logs from two files may differ if the game abruptly terminates.
 
 **No automatic network-worker loading is authorized by this test.** Once this is hardware-validated, a separately opt-in BG-14E may replace the canary with `pspotify_bg_net.prx` and test IP acquisition and resource ownership.
+
+## Hardware result — 2026-11-19
+
+PSP-3000 / ARK-5 / Metal Slug Anthology, `user-loader.txt=1`:
+
+- Game launch, interactive play, BG music and overlay were reported working.
+- `status.log`: `BGLOAD: loading user-mode canary into user partition`, `BGLOAD: user-mode canary started`.
+- `user-canary.log`: `BGCANARY: user-mode module started`.
+- No `BGLOAD: user-mode canary unloaded` or `BGCANARY: user-mode module stopped` in the supplied output after normal game exit.
+
+**Result:** user-mode module load/start **PASS** on hardware. Stop/unload **NOT VERIFIED**. Do not imply a clean shutdown from successful game exit. Investigate why GAME kernel PRX worker teardown did not produce explicit unload markers before attaching the network worker (which owns networking resources). Keep automatic network worker loading disabled.
