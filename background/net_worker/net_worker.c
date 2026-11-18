@@ -1,5 +1,4 @@
-/* PSPotify BG-14: user-mode infrastructure networking companion.
- * Deliberately NOT loaded by GAME plugin until module lifecycle is validated.
+/* BG-14F: opt-in GAME user-mode infrastructure network preflight.
  * No Spotify login, credential access, sockets or GAME hooks here.
  */
 #include <pspkernel.h>
@@ -117,10 +116,19 @@ static void cleanup_network(void)
 static int connect_saved_profile(void)
 {
     int state = 0;
-    if (sceNetApctlGetState(&state) == 0 &&
-        state == PSP_NET_APCTL_STATE_GOT_IP) {
+    int state_ret = sceNetApctlGetState(&state);
+    if (state_ret < 0) {
+        log_error("BGNET: initial APCTL state read failed", state_ret);
+        return -1;
+    }
+    if (state == PSP_NET_APCTL_STATE_GOT_IP) {
         log_text("BGNET: pre-existing connection GOT_IP; no new connection requested");
         return 0;
+    }
+    /* Do not take over a game's connection currently in progress. */
+    if (state != PSP_NET_APCTL_STATE_DISCONNECTED) {
+        log_error("BGNET: APCTL already busy; no connect attempted, state", state);
+        return -1;
     }
     if (!sceWlanGetSwitchState()) {
         log_text("BGNET: WLAN switch OFF");
@@ -131,6 +139,7 @@ static int connect_saved_profile(void)
     for (int profile = 1; profile <= 10 && !stop_requested; ++profile) {
         if (sceUtilityCheckNetParam(profile) != 0) continue;
         ++found;
+        log_error("BGNET: trying saved profile", profile);
         int ret = sceNetApctlConnect(profile);
         if (ret < 0) {
             log_error("BGNET: profile connect request failed", ret);
@@ -151,7 +160,9 @@ static int connect_saved_profile(void)
             }
             sceKernelDelayThread(WAIT_STEP_US);
         }
-        sceNetApctlDisconnect();
+        int disconnect_ret = sceNetApctlDisconnect();
+        if (disconnect_ret < 0)
+            log_error("BGNET: profile disconnect error", disconnect_ret);
         own_connection = 0;
         log_text("BGNET: profile timed out or failed; trying next");
         sceKernelDelayThread(250000);
