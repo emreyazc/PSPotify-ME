@@ -420,6 +420,10 @@ static int bg_main_thread(SceSize args, void *argp)
         /* Independent overlay watchdog can recover game freeze if this
          * thread hangs in an unexpected driver call. */
         bg_overlay_heartbeat();
+        /* Verify user canary teardown while GAME remains active.
+         * Never use filesystem/module calls while game threads are frozen. */
+        if (!bg_pause_active())
+            bg_user_loader_poll(bg_log);
         if (net_probe_enabled && !bg_pause_active())
             bg_net_probe_poll(bg_log);
         const int command = bg_controls(&enabled,&paused,&row,&at,
