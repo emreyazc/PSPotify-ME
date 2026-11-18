@@ -176,7 +176,7 @@ static void draw_menu(Canvas *f)
     }
     if(!game_hook)txt(f,x+16,y+172,"GAME AUDIO HOOK UNAVAILABLE",muted,1);
     else txt(f,x+16,y+172,music_paused?"PAUSED":"PLAYING",muted,1);
-    txt(f,x+16,y+186,"SELECT TRI MENU  X ACTION",muted,1);
+    txt(f,x+16,y+186,"L R TRI MENU  X ACTION",muted,1);
 }
 
 /* Validate an exact candidate buffer and never paint beyond PSP eDRAM.
