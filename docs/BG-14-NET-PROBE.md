@@ -22,3 +22,10 @@ Scope: `background/bg_net_probe.c` checks whether an APCTL export is already pre
 6. Report both network state and whether game/music remained normal.
 
 **Interpretation:** Passive APCTL state does not establish whether a background PRX can safely initialize Wi-Fi or stream Spotify while a game runs. Those must be separately designed and tested.
+
+## PSP-3000 hardware result — 2026-11-19
+
+- PSP-3000 / ARK-5 / Metal Slug Anthology: **game, menu, concurrent music and stability PASS** with `net-probe.txt=1`.
+- `status.log` (twice): `BGNET: passive probe enabled; no connection will be started`, followed by `BGNET: APCTL export unavailable; passive probe disabled`.
+- **Interpretation:** No APCTL export was resolved via the diagnostic's two candidate module/library names. This does **not** establish that networking is impossible in a GAME PRX; networking is not initialized by this probe. Verify loaded module identity, privilege boundary and initialization/ownership before any connection implementation.
+- Next: a separately gated, bounded networking test; do not alter the accepted audio, input or framebuffer hooks.
