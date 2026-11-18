@@ -51,11 +51,18 @@ void bg_user_loader_start(void (*logline)(const char *))
     int status = -1;
     int started = sceKernelStartModule(uid, 0, NULL, &status, NULL);
     if (started < 0 || status < 0) {
-        logline("BGLOAD: start failed; attempting to unload");
-        /* Only unload when module start did not make it resident. */
-        if (started < 0 || started == 0) {
-            if (sceKernelUnloadModule(uid) >= 0) canary_uid = -1;
+        logline("BGLOAD: start failed; cleanup guarded");
+        if (started >= 0) {
+            /* Start returned success; the module may still be resident. */
+            int stop_status = -1;
+            if (sceKernelStopModule(uid, 0, NULL, &stop_status, NULL) < 0 ||
+                stop_status < 0) {
+                logline("BGLOAD: failed-start canary could not stop; retained");
+                canary_started = 1;
+                return;
+            }
         }
+        if (sceKernelUnloadModule(uid) >= 0) canary_uid = -1;
         return;
     }
     canary_started = 1;
