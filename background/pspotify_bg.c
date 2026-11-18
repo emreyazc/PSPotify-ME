@@ -14,6 +14,7 @@
 #include <pspsdk.h>
 #include "bg_audio.h"
 #include "bg_pcm_source.h"
+#include "bg_net_probe.h"
 #include "bg_overlay.h"
 #include "bg_input.h"
 #include "bg_pause.h"
@@ -31,6 +32,7 @@ PSP_MAIN_THREAD_ATTR(0);
 #define BG_LOG   "ms0:/seplugins/pspotify_bg/status.log"
 #define BG_ENABLE "ms0:/seplugins/pspotify_bg/enabled.txt"
 #define BG_MIXER "ms0:/seplugins/pspotify_bg/mixer.txt"
+#define BG_NET_PROBE "ms0:/seplugins/pspotify_bg/net-probe.txt"
 
 /* Numbered WAV slots: next/previous shortcuts cycle through existing files.
  * The old single music.wav remains a backwards-compatible fallback. */
@@ -104,6 +106,17 @@ static void bg_load_settings(void)
 
 /* Independent of the app's settings.ini. Absent/invalid file = OFF.
  * This prevents the plugin from playing merely because it is in PLUGINS.TXT. */
+/* Explicitly opt in; default is OFF to preserve existing GAME behavior. */
+static int bg_net_probe_enabled(void)
+{
+    char value = 0;
+    SceUID fd = sceIoOpen(BG_NET_PROBE, PSP_O_RDONLY, 0);
+    if (fd < 0) return 0;
+    int size = sceIoRead(fd, &value, 1);
+    sceIoClose(fd);
+    return size == 1 && value == '1';
+}
+
 static int bg_enabled(void)
 {
     char b = 0;
@@ -391,6 +404,8 @@ static int bg_main_thread(SceSize args, void *argp)
         bg_log("BG: WARNING controller capture unavailable; menu buttons may reach the game");
 
     bg_scan_tracks();
+    const int net_probe_enabled = bg_net_probe_enabled();
+    if (net_probe_enabled) bg_log("BGNET: passive probe enabled; no connection will be started");
     int enabled = bg_enabled(),paused = 0,row = 0,at = 0,invalid = 0;
     int channel = -1,use_src = 0;
     SceUID wav_fd = -1;
@@ -402,6 +417,8 @@ static int bg_main_thread(SceSize args, void *argp)
         /* Independent overlay watchdog can recover game freeze if this
          * thread hangs in an unexpected driver call. */
         bg_overlay_heartbeat();
+        if (net_probe_enabled && !bg_pause_active())
+            bg_net_probe_poll(bg_log);
         const int command = bg_controls(&enabled,&paused,&row,&at,
                                         channel >= 0 || use_src || wav_fd >= 0);
         bg_overlay_state(enabled,bg_volume,bg_game_audio_volume(),
