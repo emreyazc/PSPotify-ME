@@ -405,7 +405,7 @@ static int bg_main_thread(SceSize args, void *argp)
         bg_log("BG: WARNING controller capture unavailable; menu buttons may reach the game");
 
     bg_scan_tracks();
-    /* BG-14D: only an opt-in user-mode canary; networking is NOT loaded. */
+    /* BG-14F: default OFF; separate flags explicitly permit one user-mode module. */
     bg_user_loader_start(bg_log);
     const int net_probe_enabled = bg_net_probe_enabled();
     if (net_probe_enabled) bg_log("BGNET: passive probe enabled; no connection will be started");
@@ -420,7 +420,7 @@ static int bg_main_thread(SceSize args, void *argp)
         /* Independent overlay watchdog can recover game freeze if this
          * thread hangs in an unexpected driver call. */
         bg_overlay_heartbeat();
-        /* Verify user canary teardown while GAME remains active.
+        /* Timed user PRX teardown while GAME remains active.
          * Never use filesystem/module calls while game threads are frozen. */
         if (!bg_pause_active())
             bg_user_loader_poll(bg_log);
