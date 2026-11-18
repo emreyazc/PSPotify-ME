@@ -6,7 +6,7 @@ PRX_EXPORTS = exports.exp
 PSP_FW_VERSION = 500
 
 CFLAGS = -Os -G0 -Wall -Wextra -std=c99
-LIBS = -lpspnet_apctl -lpspnet_inet -lpspnet_resolver -lpspnet -lpsputility -lpspuser
+LIBS = -lpspnet_apctl -lpspnet_inet -lpspnet_resolver -lpspnet -lpspwlan -lpsputility -lpspuser
 
 PSPSDK := $(shell psp-config --pspsdk-path)
 include $(PSPSDK)/lib/build.mak
