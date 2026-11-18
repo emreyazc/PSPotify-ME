@@ -84,6 +84,8 @@ static int (*real_set_frame_buf)(void *, int, int, int);
 static volatile unsigned flip_calls;
 static volatile int painting;
 static volatile unsigned last_flip_us;
+/* Updated only after a successful incoming-framebuffer overlay paint. */
+static volatile unsigned last_hook_paint_us;
 static volatile int hook_installed;
 static volatile unsigned worker_heartbeat_us;
 
@@ -206,7 +208,8 @@ static int bg_set_frame_buf_hook(void *top, int stride, int fmt, int sync)
     ++flip_calls;
     if (visible && running && !painting) {
         painting = 1;
-        paint_buffer(top, stride, fmt);
+        if (paint_buffer(top, stride, fmt) == 0)
+            last_hook_paint_us = sceKernelGetSystemTimeLow();
         painting = 0;
     }
     if (real_set_frame_buf)
@@ -264,14 +267,14 @@ static int overlay_thread(SceSize args, void *argp)
             sceKernelDelayThread(30000);
             continue;
         }
-        /* A scene change may overwrite or replace the buffer after the
-         * game's SetFrameBuf call. Even while the hook is active, refresh
-         * the currently DISPLAYED VRAM buffer once on each vblank.
-         * The synchronous hook paints upcoming frames; this vblank pass
-         * also catches menus, videos and temporary scene-transition
-         * buffers that the game renders after the flip. */
+        /* Use vblank polling only when the incoming-framebuffer hook has
+         * not successfully painted for 100 ms (or could not be installed).
+         * Continuously painting both paths can race the game's rendering
+         * and cause overlay flicker. */
         sceDisplayWaitVblankStart();
-        if (running && visible && !painting) {
+        if (running && visible && !painting &&
+            (!hook_installed ||
+             (unsigned)(sceKernelGetSystemTimeLow() - last_hook_paint_us) > 100000u)) {
             painting = 1;
             poll_paint();
             painting = 0;
@@ -288,6 +291,7 @@ int bg_overlay_start(void)
     painting = 0;
     hook_installed = 0;
     last_flip_us = 0;
+    last_hook_paint_us = 0;
     worker_heartbeat_us = sceKernelGetSystemTimeLow();
     /* No hook is added if the CFW cannot find the official display export. */
     install_flip_hook();
@@ -345,7 +349,12 @@ void bg_overlay_heartbeat(void)
 {
     worker_heartbeat_us = sceKernelGetSystemTimeLow();
 }
-void bg_overlay_show(int show){visible=show;}
+void bg_overlay_show(int show)
+{
+    if (show && !visible)
+        last_hook_paint_us = 0; /* Allow fallback until first successful hook paint. */
+    visible = show;
+}
 int bg_overlay_visible(void){return visible;}
 void bg_overlay_state(int active,int mvol,int gvol,int hooks,int paused,int row,int track)
 {
