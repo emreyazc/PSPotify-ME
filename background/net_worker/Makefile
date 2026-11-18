@@ -6,6 +6,8 @@ PRX_EXPORTS = exports.exp
 PSP_FW_VERSION = 500
 
 CFLAGS = -Os -G0 -Wall -Wextra -std=c99
+# Standalone PRX exports module_start/module_stop; do not link crt0_prx's entry point.
+LDFLAGS = -nostartfiles
 LIBS = -lpspnet_apctl -lpspnet_inet -lpspnet_resolver -lpspnet -lpspwlan -lpsputility -lpspuser
 
 PSPSDK := $(shell psp-config --pspsdk-path)
