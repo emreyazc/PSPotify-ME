@@ -6,7 +6,7 @@
  * is showing, games receive a NEUTRAL controller report. The PRX's own
  * worker reads the real report, so navigating our menu still works.
  *
- * The SELECT+TRIANGLE open chord is also hidden while the menu is
+ * The L+R+TRIANGLE open chord is also hidden while the menu is
  * initially closed. Once closed, held buttons are suppressed until ALL
  * controls have been released, preventing e.g. CIRCLE from closing the
  * menu and also accidentally acting on the game.
@@ -48,7 +48,7 @@ static int should_hide(u32 pressed)
         return 1;
     }
 
-    const u32 open_keys = PSP_CTRL_SELECT | PSP_CTRL_TRIANGLE;
+    const u32 open_keys = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_TRIANGLE;
     if ((pressed & open_keys) == open_keys) {
         until_released = 1;
         return 1;
