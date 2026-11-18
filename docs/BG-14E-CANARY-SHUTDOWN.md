@@ -37,3 +37,17 @@ Diagnostic commit `d88af72` logs both the return of `sceKernelStopModule` and it
 ## Root cause candidate discovered — PRX export type
 
 Hardware diagnostic: `sceKernelStopModule` returned `0x00000000` but the initial status sentinel remained `0xFFFFFFFF`; `module_stop` logged no marker. Inspection found **`PSP_EXPORT_VAR(module_stop)` instead of `PSP_EXPORT_FUNC(module_stop)`** in both `background/user_canary/exports.exp` and `background/net_worker/exports.exp`. Official PSPSDK PRX examples use `PSP_EXPORT_FUNC(module_stop)`. Both export tables have been corrected; this is a plausible root cause, **not yet hardware-verified**. Rebuild `background/user_canary` (required; previous PRX has old exports), plus optionally `background/net_worker` (no deployment). GAME PRX need not be rebuilt for this export-only correction. Replace ONLY the canary PRX on PSP, retain the previous GAME PRX, temporarily set `user-loader.txt=1`, test in-game ~15 seconds and inspect `BGLOAD:`/`BGCANARY:` markers. Restore `user-loader.txt=0` afterward. Expected: stop status `0x00000000`, canary stopped marker, unload success. Do not attach the network worker until verified.
+
+## Hardware acceptance — 2026-11-19
+
+After changing `PSP_EXPORT_VAR(module_stop)` to `PSP_EXPORT_FUNC(module_stop)` and rebuilding/replacing the user-canary PRX, the PSP-3000 + ARK-5 hardware test reported:
+
+```text
+BGLOAD: stop API return 0x00000000
+BGLOAD: stop module status 0x00000000
+BGLOAD: unload API return 0x0412387D
+BGLOAD: user-mode canary unloaded
+BGCANARY: user-mode module stopped
+```
+
+**BG-14E: PASS** — active-game user module stop and unload succeeded on hardware. The nonnegative unload API result was treated as success. The user restored `user-loader.txt=0` afterward. This verifies the canary only; the actual network worker's startup, Wi-Fi acquisition, cleanup and coexistence with GAME remain untested.
