@@ -4,6 +4,16 @@
 
 Bu paketi kullanırken mevcut PSPotify ME `EBOOT.PBP` dosyasına **dokunmuyorsun**. PSP hafızasının `flash0` / `flash1` alanlarına **hiçbir şey yazılmaz**. Eklenti yalnızca bilinçli olarak `PLUGINS.TXT` dosyasına eklenince yüklenir.
 
+## BG-13 — Metal Slug Anthology SELECT çakışması (yeni test, PSP doğrulaması bekliyor)
+
+**Cihazdan doğrulanan bilgi:** Metal Slug Anthology'de tek başına SELECT'e basmak oyun içi pause yapıyor. Önceki PSPotify menü kısayolu SELECT+ÜÇGEN idi. Bu nedenle SELECT önce oyuna ulaştığında oyun kendi Pause mekanizmasını tetikleyebilir. Bu, `pause-game.txt=0` ve logdaki `game pause disabled via pause-game.txt` satırıyla çelişmiyor; oyun kendi pause'unu tetikliyor olabilir.
+
+**Yeni kısayol: L + R + ÜÇGEN.** `bg_input.c` açık menüye ait tuşları yakalıyor, `pspotify_bg.c` açma/kapatma kombinasyonunu dinliyor, `bg_overlay.c` yardım metnini gösteriyor. SELECT+ÜÇGEN artık PSPotify menüsünü açmıyor. Bu değişiklik **yalnızca PRX içinde**; müzik çalma, karıştırıcı, `pause-game.txt` (varsayılan OFF), EBOOT ve `master` aynen kalıyor.
+
+**Hedefli test:** Metal Slug 5'te oyun sayacı/düşman animasyonları açıkken **L + R + ÜÇGEN** ile PSPotify menüsünü aç, 10 saniye izle. Menü açıkken sayaç ilerliyorsa oyunu önceki SELECT kısayoluyla Metal Slug'ın kendi pause sistemine sokmuşuz; yeni kısayol bunu önlüyor. Menü kapatmak için O veya tekrar L+R+ÜÇGEN. **Tek başına SELECT** hâlâ Metal Slug'ın doğal pause tuşudur, değiştirilmedi.
+
+**Not:** SELECT+L/R ile önceki/sonraki WAV kısayolları (menü kapalıyken) bu aşamada aynen korundu ve Metal Slug'ın pause tuşuyla çakışabilir. Bunlar ayrı iyileştirme kalemidir; oyun içinde önce menüden NEXT/PREV kullan. Yeni kombinasyonun her oyunda çakışmasız olması garanti değil. Değişiklik henüz donanımda test edilmedi.
+
 ## BG-12 — Metal Slug 5 kilitlenmesi: güvenli varsayılan + I/O izolasyonu (2026-10-28)
 
 **Cihaz testi sonucu:** Metal Slug 5 oyun esnasında SELECT+ÜÇGEN menüsü açılıyor, kontrol tuşları oyuna geçmiyor. Müzik KAPALI iken oyun duraklatması ve menü kontrolleri çalışıyor; menü hâlâ yer yer **eksik görünüyor**. Müzik AÇIK yapılınca PSP tamamen kilitlendi ve eski SELECT+START kurtarması başarısız oldu. Bu önemli gerçek cihaz regresyonudur. **BG-11 deneysel oyun durdurması artık varsayılan olarak KAPALI.**
