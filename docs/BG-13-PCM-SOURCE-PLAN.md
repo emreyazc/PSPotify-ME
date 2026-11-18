@@ -1,6 +1,6 @@
 # BG-13 — PCM source separation and Spotify integration roadmap
 
-Status: design / not implemented. Baseline: commit 5d30eca (PSP-3000 / ARK-5 / Metal Slug Anthology hardware acceptance).
+Status: BG-13 implemented and PSP-3000 hardware accepted (2026-11-19). Baseline: commit 5d30eca (PSP-3000 / ARK-5 / Metal Slug Anthology hardware acceptance).
 
 ## Accepted baseline — do not regress
 - GAME PRX loads and unloads safely.
@@ -43,3 +43,11 @@ The WAV source remains the only implemented source in BG-13. Do not build a Spot
 3. Next/previous, pause/play, music/game volume and enabled persistence behave as before.
 4. Menu has no flicker, game controls resume normally after closing.
 5. Disable/stop and PRX unload leave no stale audio channel or syscall hook.
+
+## BG-13 hardware acceptance — 2026-11-19
+
+- Branch: `feature/background-audio-prx`; source integration completed at `e87e797`.
+- Built with the existing `pspdev/pspdev:latest` Docker Makefile setup and installed on PSP-3000 running ARK-5.
+- Prior PRX preserved as `ms0:/seplugins/pspotify_bg/pspotify_bg.prx.bak_20261119_015150`.
+- Metal Slug Anthology user hardware results: **4/4 PASS** — stable flicker-free in-game menu; music with game audio; music continues after closing menu; next/previous and pause controls work.
+- BG-14 is the next milestone: investigate and validate network access from GAME without changing accepted audio/overlay behavior.
