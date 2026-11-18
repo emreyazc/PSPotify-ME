@@ -16,6 +16,21 @@ static unsigned canary_started_us;
 static int canary_auto_stop_pending;
 #define BG_CANARY_LIFETIME_US 8000000u
 
+/* No stdio dependency in kernel GAME PRX: fixed-size hex diagnostics. */
+static void bgload_log_code(void (*logline)(const char *),
+                            const char *message, int value)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char line[96];
+    int n = 0;
+    while (message[n] && n < 65) { line[n] = message[n]; ++n; }
+    line[n++] = ' '; line[n++] = '0'; line[n++] = 'x';
+    for (int shift = 28; shift >= 0; shift -= 4)
+        line[n++] = hex[((unsigned int)value >> shift) & 15u];
+    line[n] = '\0';
+    logline(line);
+}
+
 static int user_opted_in(void)
 {
     char c = 0;
@@ -80,16 +95,27 @@ void bg_user_loader_stop(void (*logline)(const char *))
     if (canary_uid < 0) return;
     if (canary_started) {
         int status = -1;
-        if (sceKernelStopModule(canary_uid, 0, NULL, &status, NULL) < 0 || status < 0) {
-            logline("BGLOAD: canary stop failed; leaving module resident");
+        int ret = sceKernelStopModule(canary_uid, 0, NULL, &status, NULL);
+        bgload_log_code(logline, "BGLOAD: stop API return", ret);
+        bgload_log_code(logline, "BGLOAD: stop module status", status);
+        if (ret < 0) {
+            logline("BGLOAD: stop API failed; leaving canary resident");
+            return;
+        }
+        if (status < 0) {
+            logline("BGLOAD: stop returned negative module status; leaving canary resident");
             return;
         }
         canary_started = 0;
     }
-    if (sceKernelUnloadModule(canary_uid) >= 0) {
+    int unload_ret = sceKernelUnloadModule(canary_uid);
+    bgload_log_code(logline, "BGLOAD: unload API return", unload_ret);
+    if (unload_ret >= 0) {
         logline("BGLOAD: user-mode canary unloaded");
         canary_uid = -1;
-    } else logline("BGLOAD: unload failed; leaving module resident");
+    } else {
+        logline("BGLOAD: unload failed; leaving module resident");
+    }
 }
 
 /* Normal GAME exit does not reliably invoke our PRX's module_stop.
