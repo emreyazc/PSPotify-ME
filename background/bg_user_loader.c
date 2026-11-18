@@ -12,6 +12,9 @@
 #define BG_LOADER_ENABLE "ms0:/seplugins/pspotify_bg/user-loader.txt"
 static SceUID canary_uid = -1;
 static int canary_started;
+static unsigned canary_started_us;
+static int canary_auto_stop_pending;
+#define BG_CANARY_LIFETIME_US 8000000u
 
 static int user_opted_in(void)
 {
@@ -66,7 +69,10 @@ void bg_user_loader_start(void (*logline)(const char *))
         return;
     }
     canary_started = 1;
+    canary_started_us = sceKernelGetSystemTimeLow();
+    canary_auto_stop_pending = 1;
     logline("BGLOAD: user-mode canary started");
+    logline("BGLOAD: scheduled canary stop/unload after 8 seconds in GAME");
 }
 
 void bg_user_loader_stop(void (*logline)(const char *))
@@ -84,4 +90,17 @@ void bg_user_loader_stop(void (*logline)(const char *))
         logline("BGLOAD: user-mode canary unloaded");
         canary_uid = -1;
     } else logline("BGLOAD: unload failed; leaving module resident");
+}
+
+/* Normal GAME exit does not reliably invoke our PRX's module_stop.
+ * Exercise stop/unload while the GAME worker is still alive instead.
+ * Called on the existing worker thread, never on a display/input hook. */
+void bg_user_loader_poll(void (*logline)(const char *))
+{
+    if (!canary_auto_stop_pending || canary_uid < 0) return;
+    const unsigned elapsed = (unsigned)(sceKernelGetSystemTimeLow() - canary_started_us);
+    if (elapsed < BG_CANARY_LIFETIME_US) return;
+    canary_auto_stop_pending = 0; /* One attempt only; no unload retry loop. */
+    logline("BGLOAD: scheduled canary shutdown requested");
+    bg_user_loader_stop(logline);
 }
