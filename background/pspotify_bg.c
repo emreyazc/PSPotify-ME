@@ -15,6 +15,7 @@
 #include "bg_audio.h"
 #include "bg_pcm_source.h"
 #include "bg_net_probe.h"
+#include "bg_user_loader.h"
 #include "bg_overlay.h"
 #include "bg_input.h"
 #include "bg_pause.h"
@@ -404,6 +405,8 @@ static int bg_main_thread(SceSize args, void *argp)
         bg_log("BG: WARNING controller capture unavailable; menu buttons may reach the game");
 
     bg_scan_tracks();
+    /* BG-14D: only an opt-in user-mode canary; networking is NOT loaded. */
+    bg_user_loader_start(bg_log);
     const int net_probe_enabled = bg_net_probe_enabled();
     if (net_probe_enabled) bg_log("BGNET: passive probe enabled; no connection will be started");
     int enabled = bg_enabled(),paused = 0,row = 0,at = 0,invalid = 0;
@@ -515,6 +518,7 @@ static int bg_main_thread(SceSize args, void *argp)
     if (channel >= 0) sceAudioChRelease(channel);
     if (use_src) sceAudioSRCChRelease();
     bg_game_audio_shutdown();
+    bg_user_loader_stop(bg_log);
     bg_log("BG: worker stopped");
     return 0;
 }
@@ -558,5 +562,6 @@ int module_stop(SceSize args, void *argp)
     bg_input_shutdown();
     bg_overlay_stop();
     bg_game_audio_shutdown();
+    bg_user_loader_stop(bg_log); /* module-stop failsafe */
     return 0;
 }
