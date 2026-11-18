@@ -27,3 +27,9 @@ Expected:
 - `BGLOAD: user-mode canary unloaded`
 
 If shutdown markers do not appear, mark **FAIL/INCONCLUSIVE** and investigate before real networking integration. The mere presence of `scheduled canary shutdown requested` is not evidence of clean unloading.
+
+## PSP-3000 result and BG-14E diagnostic revision (2026-11-19)
+
+Observed after a real in-game start: `BGLOAD: scheduled canary shutdown requested` followed by `BGLOAD: canary stop failed; leaving module resident`; only `BGCANARY: user-mode module started` appeared. Thus timer and startup **PASS**, but stop/unload **FAIL / unverified**. Not safe to load the real networking worker yet.
+
+Diagnostic commit `d88af72` logs both the return of `sceKernelStopModule` and its separate status out-parameter as hexadecimal values; it does not treat failure as success and never unloads after an unsuccessful stop. During the next test capture lines beginning `BGLOAD: stop API return` and `BGLOAD: stop module status`. If the stop API fails, collect that code before changing PSP module flags or retry policy. Restore `user-loader.txt=0` after the experiment.
