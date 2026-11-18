@@ -13,6 +13,7 @@
 #include <pspctrl.h>
 #include <pspsdk.h>
 #include "bg_audio.h"
+#include "bg_pcm_source.h"
 #include "bg_overlay.h"
 #include "bg_input.h"
 #include "bg_pause.h"
@@ -47,25 +48,12 @@ static const char *const bg_names[] = {
 #define BG_MAX_TRACKS 9
 static unsigned char bg_tracks[BG_MAX_TRACKS];
 static int bg_track_count;
-#define BG_FRAMES 1024
-#define BG_RATE   44100
-#define BG_PCM_BYTES (BG_FRAMES * 4)
-
-typedef struct {
-    int data_offset;
-    unsigned int data_bytes;
-    unsigned int remaining;
-    int channels;
-    int is_pcm16;
-} BgWav;
-
 static volatile int bg_stop;
 static SceUID bg_thread = -1;
 static int bg_volume = 70;
 static int bg_loop = 1;
 /* Global buffers avoid a large thread stack and other game threads' memory. */
 static int16_t bg_out[BG_FRAMES * 2] __attribute__((aligned(64)));
-static uint8_t bg_raw[BG_PCM_BYTES] __attribute__((aligned(64)));
 
 static void bg_log(const char *message)
 {
@@ -77,100 +65,6 @@ static void bg_log(const char *message)
     sceIoWrite(fd, message, (int)strlen(message));
     sceIoWrite(fd, "\n", 1);
     sceIoClose(fd);
-}
-
-static unsigned int bg_le16(const uint8_t *p)
-{
-    return (unsigned int)p[0] | ((unsigned int)p[1] << 8);
-}
-
-static unsigned int bg_le32(const uint8_t *p)
-{
-    return (unsigned int)p[0] | ((unsigned int)p[1] << 8) |
-           ((unsigned int)p[2] << 16) | ((unsigned int)p[3] << 24);
-}
-
-/* Deliberately limited to 16-bit, uncompressed, 44.1kHz mono/stereo WAV:
- * these can use the PSP's 44.1kHz PCM channels without a resampler/decoder. */
-static int bg_parse_wav(SceUID fd, BgWav *wav)
-{
-    uint8_t head[12], chunk[8], fmt[16];
-    int seen_format = 0, seen_data = 0;
-    memset(wav, 0, sizeof *wav);
-
-    if (sceIoRead(fd, head, sizeof head) != (int)sizeof head ||
-        memcmp(head, "RIFF", 4) || memcmp(head + 8, "WAVE", 4))
-        return -1;
-
-    for (int i = 0; i < 64; ++i) {
-        if (sceIoRead(fd, chunk, sizeof chunk) != (int)sizeof chunk) break;
-        unsigned int size = bg_le32(chunk + 4);
-        int start = sceIoLseek32(fd, 0, PSP_SEEK_CUR);
-        if (start < 0 || size > 0x7ffffff0u ||
-            (unsigned int)start + size + (size & 1u) > 0x7fffffffu)
-            return -1;
-
-        if (memcmp(chunk, "fmt ", 4) == 0 && size >= sizeof fmt) {
-            if (sceIoRead(fd, fmt, sizeof fmt) != (int)sizeof fmt) return -1;
-            wav->channels = (int)bg_le16(fmt + 2);
-            wav->is_pcm16 = (bg_le16(fmt) == 1 &&
-                bg_le32(fmt + 4) == BG_RATE &&
-                bg_le16(fmt + 14) == 16 &&
-                bg_le16(fmt + 12) == (unsigned)(wav->channels * 2));
-            seen_format = 1;
-        } else if (memcmp(chunk, "data", 4) == 0 && !seen_data) {
-            wav->data_offset = start;
-            wav->data_bytes = size;
-            seen_data = 1;
-        }
-
-        if (sceIoLseek32(fd, start + (int)(size + (size & 1u)), PSP_SEEK_SET) < 0)
-            return -1;
-        if (seen_format && seen_data) break;
-    }
-
-    if (!seen_format || !seen_data || !wav->is_pcm16 ||
-        (wav->channels != 1 && wav->channels != 2) ||
-        wav->data_bytes < (unsigned)(wav->channels * 2) ||
-        wav->data_bytes % (unsigned)(wav->channels * 2) != 0)
-        return -1;
-
-    wav->remaining = wav->data_bytes;
-    return sceIoLseek32(fd, wav->data_offset, PSP_SEEK_SET) < 0 ? -1 : 0;
-}
-
-/* Read/loop 1024 stereo frames. Small sequential file reads, no heap use.
- * The buffer is zero-filled so stopping/EOF cannot leak stale samples. */
-static int bg_fill(SceUID fd, BgWav *wav)
-{
-    int filled = 0;
-    const unsigned int bytes_per_frame = (unsigned int)wav->channels * 2u;
-    memset(bg_out, 0, sizeof bg_out);
-
-    while (filled < BG_FRAMES && !bg_stop) {
-        if (wav->remaining < bytes_per_frame)
-            break; /* End of current track: outer loop advances playlist. */
-
-        unsigned int take = (unsigned int)(BG_FRAMES - filled) * bytes_per_frame;
-        if (take > wav->remaining) take = wav->remaining;
-        int actual = sceIoRead(fd, bg_raw, (int)take);
-        if (actual <= 0) break;
-        int frames = actual / (int)bytes_per_frame;
-        if (frames <= 0) break;
-        wav->remaining -= (unsigned int)frames * bytes_per_frame;
-
-        for (int i = 0; i < frames; ++i) {
-            uint8_t *p = bg_raw + (unsigned int)i * bytes_per_frame;
-            int16_t left = (int16_t)bg_le16(p);
-            int16_t right = wav->channels == 2 ?
-                            (int16_t)bg_le16(p + 2) : left;
-            bg_out[(filled + i) * 2] = left;
-            bg_out[(filled + i) * 2 + 1] = right;
-        }
-        filled += frames;
-        if (actual < (int)take) break; /* I/O interruption; never spin */
-    }
-    return filled;
 }
 
 static int bg_parse_int(const char *s, int lo, int hi, int def)
@@ -244,11 +138,9 @@ static SceUID bg_open_track(int at, BgWav *wav)
 {
     if (at < 0 || at >= bg_track_count) return -1;
     const char *name = bg_names[bg_tracks[at]];
-    SceUID fd = sceIoOpen(name, PSP_O_RDONLY, 0);
-    if (fd < 0) return -1;
-    if (bg_parse_wav(fd, wav) < 0) {
-        bg_log("BG: invalid playlist WAV; PCM16 44100 Hz required");
-        sceIoClose(fd);
+    SceUID fd = bg_pcm_open(name, wav);
+    if (fd < 0) {
+        bg_log("BG: unable to open playlist WAV; PCM16 44100 Hz required");
         return -1;
     }
     bg_log("BG: track opened");
@@ -526,7 +418,7 @@ static int bg_main_thread(SceSize args, void *argp)
         }
 
         if (command == 1 || command == -1) {
-            if (wav_fd >= 0) sceIoClose(wav_fd);
+            if (wav_fd >= 0) bg_pcm_close(wav_fd);
             wav_fd = -1;
             if (bg_track_count)
                 at=(at + (command==1 ? 1 : bg_track_count-1))%bg_track_count;
@@ -537,7 +429,7 @@ static int bg_main_thread(SceSize args, void *argp)
         }
 
         if (!enabled) {
-            if (wav_fd >= 0) { sceIoClose(wav_fd); wav_fd=-1; }
+            if (wav_fd >= 0) { bg_pcm_close(wav_fd); wav_fd=-1; }
             if (channel >= 0) { sceAudioChRelease(channel); channel=-1; }
             if (use_src) { sceAudioSRCChRelease(); use_src=0; }
             sceKernelDelayThread(25000);
@@ -575,7 +467,7 @@ static int bg_main_thread(SceSize args, void *argp)
             invalid=0;
             bg_log("BG: audio playback started");
         }
-        int frames=bg_fill(wav_fd,&wav);
+        int frames=bg_pcm_read(wav_fd,&wav,bg_out,&bg_stop);
         if (bg_stop) break;
         if (frames > 0) {
             int volume = PSP_AUDIO_VOLUME_MAX * bg_volume / 100;
@@ -589,7 +481,7 @@ static int bg_main_thread(SceSize args, void *argp)
             }
         }
         if (wav.remaining < (unsigned)(wav.channels*2) || !frames) {
-            sceIoClose(wav_fd);
+            bg_pcm_close(wav_fd);
             wav_fd=-1;
             if (!bg_loop && at==bg_track_count-1) {
                 enabled=0; bg_write_enabled(0);
@@ -602,7 +494,7 @@ static int bg_main_thread(SceSize args, void *argp)
     bg_flush_deferred_settings();
     bg_input_shutdown();
     bg_overlay_stop(); /* join before GAME tears framebuffer down */
-    if (wav_fd >= 0) sceIoClose(wav_fd);
+    if (wav_fd >= 0) bg_pcm_close(wav_fd);
     if (channel >= 0) sceAudioChRelease(channel);
     if (use_src) sceAudioSRCChRelease();
     bg_game_audio_shutdown();
