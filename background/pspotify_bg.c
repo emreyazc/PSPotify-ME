@@ -347,7 +347,7 @@ static void bg_flush_deferred_settings(void)
     }
 }
 
-/* SELECT+TRIANGLE menu. Game controller input is captured in bg_input.c.
+/* L+R+TRIANGLE menu. Game controller input is captured in bg_input.c.
  * Returns 1=next, -1=previous, 2=pause, 3=toggle enabled. */
 static int bg_controls(int *enabled, int *paused, int *row, int *at,
                        int audio_in_use)
@@ -376,9 +376,9 @@ static int bg_controls(int *enabled, int *paused, int *row, int *at,
         return 0;
     }
 
-    if ((btn & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE)) ==
-               (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE) &&
-        (pressed & (PSP_CTRL_SELECT|PSP_CTRL_TRIANGLE))) {
+    if ((btn & (PSP_CTRL_LTRIGGER|PSP_CTRL_RTRIGGER|PSP_CTRL_TRIANGLE)) ==
+               (PSP_CTRL_LTRIGGER|PSP_CTRL_RTRIGGER|PSP_CTRL_TRIANGLE) &&
+        (pressed & (PSP_CTRL_LTRIGGER|PSP_CTRL_RTRIGGER|PSP_CTRL_TRIANGLE))) {
         int show = !bg_overlay_visible();
         if (show) {
             /* Pause real user GAME threads, never the kernel BG worker,
@@ -504,7 +504,7 @@ static int bg_main_thread(SceSize args, void *argp)
     SceUID wav_fd = -1;
     BgWav wav;
     memset(&wav,0,sizeof wav);
-    bg_log("BG: SELECT+TRIANGLE menu; no Spotify streaming yet");
+    bg_log("BG: L+R+TRIANGLE menu; no Spotify streaming yet");
 
     while (!bg_stop) {
         /* Independent overlay watchdog can recover game freeze if this
