@@ -75,8 +75,10 @@ static void bg_log_audio_error(int code, int use_src)
 {
     static const char hex[] = "0123456789ABCDEF";
     char line[] = "BG: audio output failed channel=PCM code=0x00000000";
-    /* Prefix length is fixed; replace PCM with SRC in place. */
-    if (use_src) { line[32] = 'S'; line[33] = 'R'; line[34] = 'C'; }
+    char *channel = strstr(line, "PCM");
+    if (use_src && channel) {
+        channel[0] = 'S'; channel[1] = 'R'; channel[2] = 'C';
+    }
     char *mark = strstr(line, "0x");
     if (mark) {
         mark += 2;
