@@ -1,8 +1,10 @@
 #ifndef PSPOTIFY_BG_USER_LOADER_H
 #define PSPOTIFY_BG_USER_LOADER_H
-/* BG-14D: explicit opt-in, canary-only user PRX load/unload. */
+/* BG-14G: explicit opt-in canary/network user PRX lifecycle. */
 void bg_user_loader_start(void (*logline)(const char *));
 void bg_user_loader_stop(void (*logline)(const char *));
-/* One-shot lifecycle test: stop/unload canary after 8 seconds during GAME. */
+/* Canary-only 8s poll; network has its independent 45s timer. */
 void bg_user_loader_poll(void (*logline)(const char *));
+/* Join supervisor and clean any owned PRX during GAME shutdown. */
+void bg_user_loader_shutdown(void (*logline)(const char *));
 #endif
