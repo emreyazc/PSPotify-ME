@@ -45,3 +45,25 @@ Do not replace working PRX files unless both builds succeed. Keep time-stamped b
 Expected for lifecycle: `BGLOAD: network PRX started`; `BGLOAD: scheduled network shutdown requested`; stop API and status >=0; `BGLOAD: network PRX unloaded`. Worker should report initialization, profile attempt/GOT_IP or exact failure code, then `BGNET: companion stopped and owned resources released`.
 
 Do not claim Wi-Fi connectivity from PRX loading alone. Do not enable Spotify streaming until a separate in-game successful GOT_IP and clean owned-resource cleanup have been demonstrated. Failure to unload or missing cleanup markers is **FAIL/INCONCLUSIVE**, requiring code revision.
+
+## Hardware report — 2026-11-19 (PSP-3000 / ARK-5)
+
+User supplied the following logs after a Metal Slug Anthology GAME network-preflight session:
+
+```text
+BGLOAD: loading user network PRX
+BGLOAD: load API return 0x0411E015
+BGLOAD: start API return 0x0411E015
+BGLOAD: start module status 0x00000000
+BGLOAD: network PRX started; bounded 45s hardware preflight
+BGLOAD: scheduled network stop/unload after 45 seconds in GAME
+BGNET: user-mode network companion started
+BGNET: user-mode network services initialized
+BGNET: trying saved profile 0x00000001
+BGNET: profile timed out or failed; trying next
+BGNET: trying saved profile 0x00000003
+BGNET: profile connected and GOT_IP
+BGNET: connectivity preflight finished (no Spotify traffic)
+```
+
+**Result:** user-mode network PRX load/start **PASS**, network init **PASS**, profile failover 1→3 **PASS**, saved-profile GOT_IP **PASS**. User explicitly restored `net-loader.txt=0` and `net-worker-enable.txt=0` after capture. No `BGLOAD: scheduled network shutdown requested`, `BGLOAD: network PRX unloaded`, or `BGNET: companion stopped and owned resources released` in provided output. Stop/unload is **NOT VERIFIED**. A successful GOT_IP is not a test of internet reachability, Spotify, or stream playback. Next targeted test: enable flags for one session, allow 70–90 seconds after network startup/music begins, check stop/unload logs and worker clean-resource-release marker, then disable flags. No rebuild is needed for this retest if the PRXs have not changed.
