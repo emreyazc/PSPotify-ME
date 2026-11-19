@@ -70,6 +70,22 @@ static void bg_log(const char *message)
     sceIoClose(fd);
 }
 
+/* Diagnostic only: the exact PSP audio return code matters. */
+static void bg_log_audio_error(int code, int use_src)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char line[] = "BG: audio output failed channel=PCM code=0x00000000";
+    /* Prefix length is fixed; replace PCM with SRC in place. */
+    if (use_src) { line[32] = 'S'; line[33] = 'R'; line[34] = 'C'; }
+    char *mark = strstr(line, "0x");
+    if (mark) {
+        mark += 2;
+        for (int shift = 28; shift >= 0; shift -= 4)
+            *mark++ = hex[((unsigned int)code >> shift) & 15u];
+    }
+    bg_log(line);
+}
+
 static int bg_parse_int(const char *s, int lo, int hi, int def)
 {
     int n = 0, digits = 0;
@@ -499,7 +515,7 @@ static int bg_main_thread(SceSize args, void *argp)
                sceAudioSRCOutputBlocking(volume,bg_out) :
                sceAudioOutputBlocking(channel,volume,bg_out);
             if (result < 0) {
-                bg_log("BG: audio output failed");
+                bg_log_audio_error(result, use_src);
                 enabled=0; bg_write_enabled(0);
                 continue;
             }
@@ -522,7 +538,7 @@ static int bg_main_thread(SceSize args, void *argp)
     if (channel >= 0) sceAudioChRelease(channel);
     if (use_src) sceAudioSRCChRelease();
     bg_game_audio_shutdown();
-    bg_user_loader_stop(bg_log);
+    bg_user_loader_shutdown(bg_log);
     bg_log("BG: worker stopped");
     return 0;
 }
@@ -566,6 +582,6 @@ int module_stop(SceSize args, void *argp)
     bg_input_shutdown();
     bg_overlay_stop();
     bg_game_audio_shutdown();
-    bg_user_loader_stop(bg_log); /* module-stop failsafe */
+    bg_user_loader_shutdown(bg_log); /* stop timer thread before unloading GAME PRX */
     return 0;
 }
