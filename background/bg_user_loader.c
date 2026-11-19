@@ -224,17 +224,15 @@ void bg_user_loader_stop(void (*logline)(const char *))
     if (stop_guard >= 0) sceKernelSignalSema(stop_guard, 1);
 }
 
-/* Normal GAME exit does not reliably invoke our PRX's module_stop.
- * Exercise stop/unload while the GAME worker is still alive instead.
- * Called on the existing worker thread, never on a display/input hook. */
+/* Canary remains on the GAME audio worker's 8s test timer.
+ * Network has an independent supervisor because audio output can block. */
 void bg_user_loader_poll(void (*logline)(const char *))
 {
     if (!canary_auto_stop_pending || canary_uid < 0 || loaded_network) return;
     const unsigned elapsed = (unsigned)(sceKernelGetSystemTimeLow() - canary_started_us);
-    if (elapsed < (loaded_network ? BG_NETWORK_LIFETIME_US : BG_CANARY_LIFETIME_US)) return;
+    if (elapsed < BG_CANARY_LIFETIME_US) return;
     canary_auto_stop_pending = 0; /* One attempt only; no unload retry loop. */
-    logline(loaded_network ? "BGLOAD: scheduled network shutdown requested" :
-                            "BGLOAD: scheduled canary shutdown requested");
+    logline("BGLOAD: scheduled canary shutdown requested");
     bg_user_loader_stop(logline);
 }
 
